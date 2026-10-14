@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Planta IMM</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: tablero de planta — KPIs, tabla de piezas (MP / PT / cobertura), panel de registro, historial */
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --fg:#17202b; --muted:#5d6b7a; --line:#d5dbe2;
+  --accent:#1d5ea8; --accent-ink:#ffffff; --soft:#e3ebf5;
+  --ok:#1f7a4d; --ok-bg:#dff2e7; --warn:#9a6200; --warn-bg:#fbeccb; --crit:#b42318; --crit-bg:#fbe1de; --none-bg:#e8ebef;
+  --f-display:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body:"IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+  --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#11161c; --panel:#1a212a; --fg:#e6ebf1; --muted:#97a3b1; --line:#2c3642;
+  --accent:#6aa5ea; --accent-ink:#0b1420; --soft:#1f2c3b;
+  --ok:#5fd19a; --ok-bg:#163527; --warn:#f0b54d; --warn-bg:#3a2c10; --crit:#ff8a7d; --crit-bg:#401b18; --none-bg:#252d37; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#11161c; --panel:#1a212a; --fg:#e6ebf1; --muted:#97a3b1; --line:#2c3642;
+  --accent:#6aa5ea; --accent-ink:#0b1420; --soft:#1f2c3b;
+  --ok:#5fd19a; --ok-bg:#163527; --warn:#f0b54d; --warn-bg:#3a2c10; --crit:#ff8a7d; --crit-bg:#401b18; --none-bg:#252d37; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font:15px/1.45 var(--f-body)}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:grid;gap:20px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px}
+.eyebrow{font:500 12px var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:800 clamp(24px,4vw,34px)/1.1 var(--f-display);margin:4px 0 0;text-wrap:balance;letter-spacing:-.01em}
+h2{font:700 17px var(--f-display);margin:0}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+button,input,select{font:inherit;color:inherit}
+.btn{border:1px solid var(--line);background:var(--panel);padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:500}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.small{padding:3px 9px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible,select:focus-visible,tr:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+.kpi .v{font:700 28px var(--f-mono);font-variant-numeric:tabular-nums;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--muted)}
+.kpi.crit .v{color:var(--crit)} .kpi.warn .v{color:var(--warn)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:20px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;min-width:0}
+.card-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tools input{width:180px} .tools select{width:auto}
+.chip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:5px 12px;font-size:13px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font:500 11px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.r,th.r{text-align:right}
+tbody tr.item{cursor:pointer} tbody tr.item:hover{background:var(--soft)}
+.code{font:500 12px var(--f-mono);color:var(--muted)}
+.pill{font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;display:inline-block}
+.pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.crit{background:var(--crit-bg);color:var(--crit)} .pill.none{background:var(--none-bg);color:var(--muted)}
+.cov{display:grid;gap:3px;min-width:130px}
+.gauge{position:relative;height:8px;background:var(--soft);border-radius:4px;overflow:hidden}
+.gauge i{position:absolute;inset:0 auto 0 0;border-radius:4px}
+.gauge b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--fg);opacity:.55}
+.fifo{font-size:12px;color:var(--muted)}
+form{display:grid;gap:10px}
+label{display:grid;gap:4px;font-size:13px;color:var(--muted);font-weight:500}
+input,select{border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:8px 10px;width:100%;min-width:0}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.seg{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:transparent;padding:8px 2px;cursor:pointer;font-size:12px;font-weight:500}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.effect{font:500 12px var(--f-mono);color:var(--accent);background:var(--soft);padding:6px 8px;border-radius:6px}
+.msg{font-size:13px;min-height:1.2em}
+.msg.err{color:var(--crit)} .msg.ok{color:var(--ok)}
+.side{display:grid;gap:16px}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-4px 0 12px}
+.tabs button{border:0;background:none;padding:8px 10px;cursor:pointer;font-weight:600;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--fg);border-color:var(--accent)}
+.hint{font-size:12px;color:var(--muted);margin:0}
+.empty{padding:28px 8px;text-align:center;color:var(--muted)}
+.mv-in{color:var(--ok)} .mv-out{color:var(--crit)} .mv-adj{color:var(--warn)}
+.confirm{display:inline-flex;gap:4px}
+.clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+.cl{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;text-align:left;cursor:pointer;display:grid;gap:4px}
+.cl:hover{border-color:var(--accent)} .cl[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.cl .n{font:700 15px var(--f-display)} .cl .m{font-size:12px;color:var(--muted)}
+.cl .row{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.cl-list{display:grid;gap:6px;margin-top:4px}
+.cl-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}
+@media (max-width:960px){.grid{grid-template-columns:minmax(0,1fr)} .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (prefers-reduced-motion:no-preference){.gauge i{transition:width .3s}}
+</style>
+
+</head>
+<body>
+<div id="loginScreen" class="login" hidden>
+  <div class="card" style="max-width:420px;margin:12vh auto;text-align:center;display:grid;gap:14px">
+    <div class="eyebrow">IMM Autopartes</div>
+    <h1 style="margin:0">Stock Planta IMM</h1>
+    <p class="hint" style="font-size:14px">Ingresá con tu cuenta de Google para ver y registrar movimientos.</p>
+    <button class="btn primary" id="loginBtn">Ingresar con Google</button>
+    <div class="msg" id="loginMsg"></div>
+  </div>
+</div>
+<div class="wrap" id="app" hidden>
+  <header>
+    <div>
+      <div class="eyebrow">IMM Autopartes · Patrón IV, Córdoba · Todas las celdas</div>
+      <h1>Stock Planta IMM</h1>
+    </div>
+    <div class="tools">
+      <span class="hint" id="sync">Conectando…</span>
+      <button class="btn" id="exportBtn">Exportar CSV</button>
+      <label class="btn" id="importWrap" hidden style="display:inline-flex">Importar datos<input type="file" id="importFile" accept=".json" hidden></label>
+      <span class="hint" id="userName"></span>
+      <button class="btn" id="logoutBtn">Salir</button>
+    </div>
+  </header>
+
+  <section class="kpis" aria-label="Resumen">
+    <div class="kpi"><div class="eyebrow">Piezas activas</div><div class="v" id="kTotal">–</div><div class="s" id="kTotalS">&nbsp;</div></div>
+    <div class="kpi crit"><div class="eyebrow">PT bajo stock seguridad</div><div class="v" id="kCrit">–</div><div class="s">Riesgo de no cubrir el retiro</div></div>
+    <div class="kpi warn"><div class="eyebrow">Materia prima a pedir</div><div class="v" id="kMP">–</div><div class="s">MP ≤ punto de pedido</div></div>
+    <div class="kpi"><div class="eyebrow">Despachado hoy</div><div class="v" id="kDesp">–</div><div class="s" id="kProd">&nbsp;</div></div>
+  </section>
+
+  <section aria-label="Clientes">
+    <div class="card-h" style="margin-bottom:8px"><h2>Clientes</h2><span class="hint">Tocar un cliente para filtrar la tabla</span></div>
+    <div class="clients" id="clStrip"><div class="hint">Cargando clientes…</div></div>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <div class="card-h">
+        <h2>Stock por pieza</h2>
+        <div class="tools">
+          <input id="q" type="search" placeholder="Buscar pieza o código" aria-label="Buscar pieza">
+          <select id="fClient" aria-label="Filtrar por cliente"><option value="">Todos los clientes</option></select>
+          <button class="chip" id="fAlert" aria-pressed="false">Solo alertas</button>
+        </div>
+      </div>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Pieza</th><th>Cliente · Celda</th><th class="r">Materia prima</th><th class="r">Producto terminado</th><th class="r">Demanda/día</th><th>Cobertura PT</th><th>Estado</th></tr></thead>
+          <tbody id="itemsBody"><tr><td colspan="7" class="empty">Cargando piezas…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="hint" style="margin-top:10px">Cobertura = producto terminado ÷ demanda diaria (o el despacho promedio de 14 días si no hay demanda cargada). La marca vertical es el stock de seguridad. Tocar una fila para editar la pieza.</p>
+    </section>
+
+    <aside class="side">
+      <section class="card">
+        <div class="tabs" role="tablist">
+          <button role="tab" aria-selected="true" id="tabMov">Registrar movimiento</button>
+          <button role="tab" aria-selected="false" id="tabItem">Pieza</button>
+          <button role="tab" aria-selected="false" id="tabCl">Clientes</button>
+        </div>
+
+        <form id="movForm" autocomplete="off">
+          <div class="seg" id="movType">
+            <button type="button" aria-pressed="true" data-t="recepcion">Recepción</button>
+            <button type="button" aria-pressed="false" data-t="produccion">Producción</button>
+            <button type="button" aria-pressed="false" data-t="despacho">Despacho</button>
+            <button type="button" aria-pressed="false" data-t="scrap">Scrap</button>
+            <button type="button" aria-pressed="false" data-t="ajuste">Ajuste</button>
+          </div>
+          <div class="effect" id="effect"></div>
+          <label>Pieza<select id="movItem" required></select></label>
+          <div class="row2">
+            <label><span id="cantLbl">Cantidad</span><input id="movCant" type="number" step="1" required></label>
+            <label id="etapaWrap" hidden>Etapa<select id="movEtapa"><option value="MP">Materia prima</option><option value="PT">Producto terminado</option></select></label>
+            <label id="loteWrap"><span id="loteLbl">Remito / colada</span><input id="movLote"></label>
+          </div>
+          <p class="fifo" id="fifoHint"></p>
+          <label>Nota<input id="movNota" placeholder="Ej. Turno mañana"></label>
+          <button class="btn primary" type="submit" id="movSubmit">Registrar</button>
+          <div class="msg" id="movMsg"></div>
+        </form>
+
+        <form id="itemForm" autocomplete="off" hidden>
+          <div class="row2">
+            <label>Código<input id="itCode" required placeholder="SM-001"></label>
+            <label>Cliente<select id="itClient"><option value="">Sin asignar</option></select></label>
+          </div>
+          <label>Descripción<input id="itName" required placeholder="Stay Manifold"></label>
+          <div class="row2">
+            <label>Celda / máquina<input id="itCell" placeholder="Hyundai WIA F500D"></label>
+            <label>Demanda diaria (pzas)<input id="itDem" type="number" min="0" step="1" value="0"></label>
+          </div>
+          <div class="row3">
+            <label>SS de PT<input id="itSS" type="number" min="0" step="1" value="0"></label>
+            <label>Pto. pedido PT<input id="itPP" type="number" min="0" step="1" value="0"></label>
+            <label>Pto. pedido MP<input id="itPPMP" type="number" min="0" step="1" value="0"></label>
+          </div>
+          <p class="hint">SS: stock de seguridad. Con el punto de pedido de PT se programa producción; con el de MP se pide materia prima al proveedor.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" type="submit" id="itSubmit">Crear pieza</button>
+            <button class="btn" type="button" id="itCancel" hidden>Nueva</button>
+            <span id="itDelWrap"></span>
+          </div>
+          <div class="msg" id="itMsg"></div>
+        </form>
+
+        <form id="clForm" autocomplete="off" hidden>
+          <div class="row2">
+            <label>Cliente<input id="clName" required placeholder="Ej. Volkswagen"></label>
+            <label>Rubro<select id="clRubro"><option>Automotriz</option><option>Agro</option><option>Transporte</option><option>Otro</option></select></label>
+          </div>
+          <button class="btn primary" type="submit">Agregar cliente</button>
+          <div class="msg" id="clMsg"></div>
+          <div class="cl-list" id="clList"></div>
+        </form>
+      </section>
+    </aside>
+  </div>
+
+  <section class="card">
+    <div class="card-h"><h2>Últimos movimientos</h2><span class="hint" id="movCount"></span></div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Fecha</th><th>Pieza</th><th>Movimiento</th><th class="r">Cantidad</th><th>Lote</th><th>Nota</th><th>Registró</th><th></th></tr></thead>
+        <tbody id="movBody"><tr><td colspan="8" class="empty">Todavía no hay movimientos. Cargá el conteo inicial de cada pieza con “Ajuste”.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const MOV = {
+  recepcion:{lbl:"Recepción MP", eff:"+ Materia prima", lote:"Remito / colada", cls:"mv-in"},
+  produccion:{lbl:"Producción", eff:"− Materia prima · + Producto terminado", lote:"Orden / lote", cls:"mv-in"},
+  despacho:{lbl:"Despacho", eff:"− Producto terminado (FIFO)", lote:"Remito", cls:"mv-out"},
+  scrap:{lbl:"Scrap", eff:"− Materia prima (pieza perdida en proceso)", lote:"Causa", cls:"mv-out"},
+  ajuste:{lbl:"Ajuste", eff:"± Conteo físico en la etapa elegida", lote:"Lote", cls:"mv-adj"}
+};
+const state = {clients:[], items:[], movs:[], q:"", client:"", alert:false, movType:"recepcion", editing:null, canWrite:true, names:{}};
+let db = null, user = null, myId = null, myName = "";
+const fmt = n => (Math.round(n*10)/10).toLocaleString("es-AR");
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fdate = ts => new Date(ts).toLocaleString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+const startOfDay = () => { const d=new Date(); d.setHours(0,0,0,0); return d.getTime(); };
+
+/* ---- stock por etapa y lotes FIFO, calculado desde los movimientos ---- */
+function effects(m){
+  const q = Math.abs(Number(m.cant)||0);
+  switch(m.tipo){
+    case "recepcion": return [["MP", q]];
+    case "produccion": return [["MP", -q], ["PT", q]];
+    case "despacho": return [["PT", -q]];
+    case "scrap": return [["MP", -q]];
+    case "ajuste": return [[m.etapa==="PT"?"PT":"MP", Number(m.cant)||0]];
+  }
+  return [];
+}
+function compute(){
+  const by = {};
+  for (const it of state.items) by[it.id] = {MP:0, PT:0, lots:{MP:[],PT:[]}, desp14:0, prodHoy:0, despHoy:0, n:0};
+  const d14 = Date.now()-14*864e5, d0 = startOfDay();
+  for (const m of [...state.movs].sort((a,b)=>a.ts-b.ts)){
+    const r = by[m.item]; if (!r) continue; r.n++;
+    for (const [st,q] of effects(m)){
+      r[st] += q;
+      const L = r.lots[st];
+      if (q>0) L.push({lote: m.lote || (m.tipo==="ajuste"?"Conteo":"s/lote"), ts:m.ts, rem:q});
+      else { let need=-q; while(need>0 && L.length){ const l=L[0], t=Math.min(l.rem,need); l.rem-=t; need-=t; if(l.rem<=1e-9) L.shift(); } }
+    }
+    const q = Math.abs(Number(m.cant)||0);
+    if (m.tipo==="despacho"){ if (m.ts>=d14) r.desp14+=q; if (m.ts>=d0) r.despHoy+=q; }
+    if (m.tipo==="produccion" && m.ts>=d0) r.prodHoy+=q;
+  }
+  for (const it of state.items){
+    const r = by[it.id], ss=+it.ss||0, pp=+it.pp||0, ppmp=+it.ppmp||0, dem=+it.dem||0;
+    r.daily = dem>0 ? dem : r.desp14/14;
+    r.cover = r.daily>0 ? r.PT/r.daily : null;
+    if (!r.n) r.status="none";
+    else r.status = (ss>0 && r.PT<=ss) || r.PT<=0 ? "crit" : (pp>0 && r.PT<=pp) ? "warn" : "ok";
+    r.mpLow = ppmp>0 && r.MP<=ppmp;
+  }
+  return by;
+}
+const STATUS = {ok:"OK", warn:"Programar", crit:"Crítico", none:"Sin datos"};
+
+function render(){
+  const calc = compute();
+  const items = [...state.items].sort((a,b)=>(a.client||"").localeCompare(b.client||"") || a.code.localeCompare(b.code));
+  // KPIs
+  let crit=0, mp=0, despHoy=0, prodHoy=0;
+  items.forEach(it=>{ const r=calc[it.id]; if (r.status==="crit") crit++; if (r.mpLow) mp++; despHoy+=r.despHoy; prodHoy+=r.prodHoy; });
+  $("#kTotal").textContent = items.length;
+  const clients = [...new Set(items.map(i=>i.client).filter(Boolean))];
+  $("#kTotalS").textContent = clients.length ? `${clients.length} cliente${clients.length>1?"s":""}` : " ";
+  $("#kCrit").textContent = crit; $("#kMP").textContent = mp;
+  $("#kDesp").textContent = fmt(despHoy); $("#kProd").textContent = `Producido hoy: ${fmt(prodHoy)} pzas`;
+
+  // clientes: lista maestra + los usados en piezas
+  const allCl = [...new Set([...state.clients.map(c=>c.name), ...clients])].sort((a,b)=>a.localeCompare(b));
+  const fc = $("#fClient"), cur = fc.value;
+  fc.innerHTML = `<option value="">Todos los clientes</option>` + allCl.map(c=>`<option>${esc(c)}</option>`).join("");
+  fc.value = allCl.includes(state.client) ? state.client : ""; state.client = fc.value;
+  const ic = $("#itClient"), icv = ic.value;
+  ic.innerHTML = `<option value="">Sin asignar</option>` + allCl.map(c=>`<option>${esc(c)}</option>`).join("");
+  ic.value = allCl.includes(icv) ? icv : "";
+  const rubro = Object.fromEntries(state.clients.map(c=>[c.name,c.rubro]));
+  $("#clStrip").innerHTML = allCl.length ? allCl.map(c=>{
+    const its = items.filter(i=>i.client===c);
+    const pt = its.reduce((a,i)=>a+calc[i.id].PT,0), al = its.filter(i=>["crit","warn"].includes(calc[i.id].status)||calc[i.id].mpLow).length;
+    return `<button class="cl" data-cl="${esc(c)}" aria-pressed="${state.client===c}"><span class="n">${esc(c)}</span><span class="m">${esc(rubro[c]||"")}</span>
+      <span class="row"><span>Piezas</span><b class="num">${its.length}</b></span>
+      <span class="row"><span>PT en stock</span><b class="num">${fmt(pt)}</b></span>
+      <span class="row"><span>Alertas</span>${al?`<span class="pill crit">${al}</span>`:`<b class="num">0</b>`}</span></button>`;
+  }).join("") : `<div class="hint">Todavía no hay clientes. Agregalos en la pestaña “Clientes”.</div>`;
+  $("#clList").innerHTML = state.clients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>{
+    const n = items.filter(i=>i.client===c.name).length;
+    return `<div class="cl-item"><span><b>${esc(c.name)}</b> <span class="code">${esc(c.rubro||"")} · ${n} pieza${n===1?"":"s"}</span></span>
+      ${state.canWrite && !n ? `<button class="btn small" type="button" data-del="${esc(c.id)}">Quitar</button>` : ""}</div>`;
+  }).join("");
+
+  const q = state.q.toLowerCase();
+  const shown = items.filter(it => (!state.client || it.client===state.client)
+    && (!q || (it.code+" "+it.name+" "+(it.cell||"")).toLowerCase().includes(q))
+    && (!state.alert || ["crit","warn"].includes(calc[it.id].status) || calc[it.id].mpLow));
+  const body = $("#itemsBody");
+  if (!items.length) body.innerHTML = `<tr><td colspan="7" class="empty">No hay piezas cargadas. Creá la primera en la pestaña “Pieza”.</td></tr>`;
+  else if (!shown.length) body.innerHTML = `<tr><td colspan="7" class="empty">Ninguna pieza coincide con el filtro.</td></tr>`;
+  else body.innerHTML = shown.map(it=>{
+    const r = calc[it.id], ss=+it.ss||0;
+    const maxD = 5, ssD = r.daily>0 ? ss/r.daily : 0;
+    const w = r.cover==null ? 0 : Math.min(100, r.cover/maxD*100);
+    const col = r.status==="crit"?"var(--crit)":r.status==="warn"?"var(--warn)":"var(--ok)";
+    const first = r.lots.PT[0];
+    return `<tr class="item" tabindex="0" data-id="${esc(it.id)}">
+      <td><div style="font-weight:600">${esc(it.name)}</div><div class="code">${esc(it.code)}</div>
+        ${first?`<div class="fifo">FIFO → despachar primero: <b>${esc(first.lote)}</b> (${fmt(first.rem)} pzas, ${Math.floor((Date.now()-first.ts)/864e5)} d)</div>`:""}</td>
+      <td>${esc(it.client||"–")}<div class="code">${esc(it.cell||"")}</div></td>
+      <td class="r num">${fmt(r.MP)}${r.mpLow?`<div><span class="pill warn">Pedir MP</span></div>`:""}</td>
+      <td class="r num"><b>${fmt(r.PT)}</b>${ss?`<div class="code">SS ${fmt(ss)}</div>`:""}</td>
+      <td class="r num">${+it.dem ? fmt(+it.dem) : (r.daily>0?`<span class="code">~${fmt(r.daily)}</span>`:"–")}</td>
+      <td><div class="cov"><span class="num">${r.cover==null?"–":fmt(r.cover)+" días"}</span>
+        <div class="gauge"><i style="width:${w}%;background:${col}"></i>${ssD>0?`<b style="left:${Math.min(99,ssD/maxD*100)}%"></b>`:""}</div></div></td>
+      <td><span class="pill ${r.status}">${STATUS[r.status]}</span></td></tr>`;
+  }).join("");
+
+  // selector de piezas
+  const sel = $("#movItem"), cv = sel.value;
+  sel.innerHTML = items.length ? items.map(it=>`<option value="${esc(it.id)}">${esc(it.code)} — ${esc(it.name)}</option>`).join("") : `<option value="">Sin piezas</option>`;
+  if (cv && items.some(i=>i.id===cv)) sel.value = cv;
+  updateHint(calc);
+
+  // historial
+  const movs = [...state.movs].sort((a,b)=>b.ts-a.ts).slice(0,80);
+  const byId = Object.fromEntries(state.items.map(i=>[i.id,i]));
+  $("#movCount").textContent = state.movs.length ? `${movs.length} de ${state.movs.length}` : "";
+  $("#movBody").innerHTML = movs.length ? movs.map(m=>{
+    const it = byId[m.item], M = MOV[m.tipo] || MOV.ajuste;
+    const sign = m.tipo==="ajuste" ? (m.cant>=0?"+":"−") : (m.tipo==="despacho"||m.tipo==="scrap") ? "−" : "+";
+    const lbl = m.tipo==="ajuste" ? `Ajuste ${m.etapa||"MP"}` : M.lbl;
+    return `<tr><td class="num" style="white-space:nowrap">${fdate(m.ts)}</td>
+      <td>${it?esc(it.code):'<span class="code">(eliminada)</span>'}</td>
+      <td class="${M.cls}" style="font-weight:600">${lbl}</td>
+      <td class="r num ${M.cls}">${sign}${fmt(Math.abs(m.cant))}</td>
+      <td class="code">${esc(m.lote||"–")}</td><td>${esc(m.nota||"")}</td>
+      <td class="who">${esc(m.uname || "–")}</td>
+      <td>${state.canWrite?`<span class="confirm" data-mid="${esc(m.id)}"><button class="btn small" data-act="ask">Anular</button></span>`:""}</td></tr>`;
+  }).join("") : `<tr><td colspan="8" class="empty">Todavía no hay movimientos. Cargá el conteo inicial de cada pieza con “Ajuste”.</td></tr>`;
+}
+
+function updateHint(calc){
+  calc = calc || compute();
+  const t = state.movType, M = MOV[t];
+  $("#effect").textContent = M.eff;
+  $("#loteLbl").textContent = M.lote;
+  $("#etapaWrap").hidden = t!=="ajuste";
+  $("#loteWrap").hidden = t==="ajuste";
+  $("#cantLbl").textContent = t==="ajuste" ? "Cantidad (+/−)" : "Cantidad (pzas)";
+  const id = $("#movItem").value, r = calc[id];
+  if (!r){ $("#fifoHint").textContent=""; return; }
+  let s = `Stock actual — MP: ${fmt(r.MP)} · PT: ${fmt(r.PT)}.`;
+  if (t==="despacho" && r.lots.PT.length) s += ` Despachar primero el lote ${r.lots.PT[0].lote} (${fmt(r.lots.PT[0].rem)} pzas).`;
+  if ((t==="produccion"||t==="scrap") && r.lots.MP.length) s += ` Consumir primero la MP ${r.lots.MP[0].lote}.`;
+  $("#fifoHint").textContent = s;
+}
+
+
+/* ---- UI ---- */
+$("#q").addEventListener("input", e=>{ state.q = e.target.value; render(); });
+$("#fClient").addEventListener("change", e=>{ state.client = e.target.value; render(); });
+$("#fAlert").addEventListener("click", e=>{ state.alert = !state.alert; e.target.setAttribute("aria-pressed", state.alert); render(); });
+$("#movType").addEventListener("click", e=>{
+  const b = e.target.closest("button"); if (!b) return;
+  state.movType = b.dataset.t;
+  document.querySelectorAll("#movType button").forEach(c=>c.setAttribute("aria-pressed", c===b));
+  updateHint();
+});
+$("#movItem").addEventListener("change", ()=>updateHint());
+
+function showTab(which){
+  [["mov","#tabMov","#movForm"],["item","#tabItem","#itemForm"],["cl","#tabCl","#clForm"]].forEach(([k,t,f])=>{
+    $(t).setAttribute("aria-selected", k===which); $(f).hidden = k!==which; });
+}
+$("#tabMov").onclick = ()=>showTab("mov");
+$("#tabItem").onclick = ()=>showTab("item");
+$("#tabCl").onclick = ()=>showTab("cl");
+$("#clStrip").addEventListener("click", e=>{ const b=e.target.closest(".cl"); if(!b) return;
+  state.client = state.client===b.dataset.cl ? "" : b.dataset.cl; render(); });
+$("#clForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if (!db) return flash("#clMsg","Base de datos no disponible en esta vista.","err");
+  const name = $("#clName").value.trim(); if (!name) return;
+  if (state.clients.some(c=>c.name.toLowerCase()===name.toLowerCase())) return flash("#clMsg","Ese cliente ya existe.","err");
+  try { await db.collection("clients").add({name, rubro:$("#clRubro").value}); $("#clName").value=""; flash("#clMsg","Cliente agregado.","ok"); }
+  catch(err){ flash("#clMsg", errText(err), "err"); }
+});
+$("#clList").addEventListener("click", async e=>{ const id=e.target.dataset?.del; if(!id||!db) return;
+  try { await db.doc("clients/"+id).delete(); } catch(err){ flash("#clMsg", errText(err), "err"); } });
+
+function editItem(id){
+  const it = state.items.find(i=>i.id===id); if (!it) return;
+  state.editing = id;
+  $("#itCode").value=it.code; $("#itClient").value=it.client||""; $("#itName").value=it.name; $("#itCell").value=it.cell||"";
+  $("#itDem").value=it.dem||0; $("#itSS").value=it.ss||0; $("#itPP").value=it.pp||0; $("#itPPMP").value=it.ppmp||0;
+  $("#itSubmit").textContent="Guardar cambios"; $("#itCancel").hidden=false;
+  $("#itDelWrap").innerHTML = state.canWrite ? `<button class="btn" type="button" id="itDel">Eliminar</button>` : "";
+  $("#itMsg").textContent=""; showTab("item");
+}
+function resetItemForm(){
+  state.editing=null; $("#itemForm").reset();
+  $("#itSubmit").textContent="Crear pieza"; $("#itCancel").hidden=true; $("#itDelWrap").innerHTML="";
+}
+$("#itCancel").onclick = resetItemForm;
+$("#itemsBody").addEventListener("click", e=>{ const tr=e.target.closest("tr.item"); if (tr) editItem(tr.dataset.id); });
+$("#itemsBody").addEventListener("keydown", e=>{ if (e.key==="Enter"){ const tr=e.target.closest("tr.item"); if (tr) editItem(tr.dataset.id); } });
+
+$("#itDelWrap").addEventListener("click", async e=>{
+  if (e.target.id==="itDel") $("#itDelWrap").innerHTML = `<span class="confirm"><button class="btn" type="button" id="itDelYes" style="color:var(--crit)">Confirmar eliminación</button><button class="btn" type="button" id="itDelNo">No</button></span>`;
+  else if (e.target.id==="itDelNo") $("#itDelWrap").innerHTML = `<button class="btn" type="button" id="itDel">Eliminar</button>`;
+  else if (e.target.id==="itDelYes" && db && state.editing){
+    try { await db.doc("items/"+state.editing).delete(); resetItemForm(); flash("#itMsg","Pieza eliminada. Sus movimientos quedan en el historial.","ok"); }
+    catch(err){ flash("#itMsg", errText(err), "err"); }
+  }
+});
+
+function flash(sel, text, kind){ const el=$(sel); el.textContent=text; el.className="msg "+(kind||""); }
+function errText(err){
+  if (err?.code==="permission-denied" || err?.code==="invalid_argument") { return "Tu usuario no tiene permiso para cargar datos. Pedile acceso al administrador."; }
+  if (err?.code==="quota_exceeded") return "Se alcanzó el límite de la base de datos. Exportá y depurá movimientos antiguos.";
+  return "No se pudo guardar. Probá de nuevo en unos segundos.";
+}
+
+$("#itemForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if (!db) return flash("#itMsg","Base de datos no disponible en esta vista.","err");
+  const code = $("#itCode").value.trim();
+  if (state.items.some(i=>i.id!==state.editing && i.code.toLowerCase()===code.toLowerCase())) return flash("#itMsg","Ya existe una pieza con ese código.","err");
+  const data = {code, name:$("#itName").value.trim(), client:$("#itClient").value.trim(), cell:$("#itCell").value.trim(),
+    dem:+$("#itDem").value||0, ss:+$("#itSS").value||0, pp:+$("#itPP").value||0, ppmp:+$("#itPPMP").value||0};
+  if (data.pp && data.pp < data.ss) return flash("#itMsg","El punto de pedido de PT no puede ser menor que el stock de seguridad.","err");
+  try {
+    if (state.editing) await db.doc("items/"+state.editing).set(data);
+    else await db.collection("items").add(data);
+    flash("#itMsg", state.editing?"Cambios guardados.":"Pieza creada.","ok");
+    if (!state.editing) resetItemForm();
+  } catch(err){ flash("#itMsg", errText(err), "err"); }
+});
+
+$("#movForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if (!db) return flash("#movMsg","Base de datos no disponible en esta vista.","err");
+  const item = $("#movItem").value, t = state.movType; const cant = Math.round(Number($("#movCant").value));
+  if (!item) return flash("#movMsg","Primero creá una pieza.","err");
+  if (!cant || (t!=="ajuste" && cant<=0)) return flash("#movMsg","Ingresá una cantidad mayor a cero.","err");
+  const r = compute()[item];
+  if ((t==="produccion"||t==="scrap") && cant > r.MP) return flash("#movMsg",`Hay ${fmt(r.MP)} pzas de MP registradas. Cargá la recepción o un ajuste de MP primero.`,"err");
+  if (t==="despacho" && cant > r.PT) return flash("#movMsg",`No alcanza el producto terminado: hay ${fmt(r.PT)} pzas.`,"err");
+  const m = {item, tipo:t, cant, nota:$("#movNota").value.trim(), ts:Date.now()};
+  if (t==="ajuste"){ m.etapa = $("#movEtapa").value; if (r[m.etapa]+cant < 0) return flash("#movMsg","El ajuste dejaría el stock negativo.","err"); }
+  else m.lote = $("#movLote").value.trim();
+  if (myId){ m.uid = myId; m.uname = myName; }
+  $("#movSubmit").disabled = true;
+  try { await db.collection("movs").add(m); flash("#movMsg",`${MOV[t].lbl} registrada.`,"ok"); $("#movCant").value=""; $("#movLote").value=""; }
+  catch(err){ flash("#movMsg", errText(err), "err"); }
+  $("#movSubmit").disabled = !state.canWrite;
+});
+
+$("#movBody").addEventListener("click", async e=>{
+  const b = e.target.closest("button"); if (!b) return;
+  const wrap = b.closest(".confirm"), id = wrap.dataset.mid;
+  if (b.dataset.act==="ask") wrap.innerHTML = `<button class="btn small" data-act="yes" style="color:var(--crit)">Sí, anular</button><button class="btn small" data-act="no">No</button>`;
+  else if (b.dataset.act==="no") wrap.innerHTML = `<button class="btn small" data-act="ask">Anular</button>`;
+  else if (b.dataset.act==="yes" && db){ try { await db.doc("movs/"+id).delete(); } catch(err){ flash("#movMsg", errText(err), "err"); } }
+});
+
+$("#exportBtn").addEventListener("click", async ()=>{
+  const calc = compute(), q = v => `"${String(v??"").replace(/"/g,'""')}"`;
+  const byId = Object.fromEntries(state.items.map(i=>[i.id,i]));
+  let csv = "﻿STOCK POR PIEZA\nCodigo;Descripcion;Cliente;Celda;Stock MP;Stock PT;Demanda diaria;Cobertura PT (dias);Stock seguridad PT;Punto pedido PT;Punto pedido MP;Estado\n";
+  for (const it of state.items){ const r=calc[it.id];
+    csv += [it.code,it.name,it.client,it.cell,r.MP,r.PT,r.daily?r.daily.toFixed(1):"",r.cover==null?"":r.cover.toFixed(1),it.ss,it.pp,it.ppmp,STATUS[r.status]].map(q).join(";")+"\n"; }
+  csv += "\nMOVIMIENTOS\nFecha;Codigo;Movimiento;Etapa;Cantidad;Lote;Nota\n";
+  for (const m of [...state.movs].sort((a,b)=>a.ts-b.ts))
+    csv += [new Date(m.ts).toLocaleString("es-AR"), byId[m.item]?.code||"(eliminada)", MOV[m.tipo]?.lbl||m.tipo, m.etapa||"", m.cant, m.lote, m.nota].map(q).join(";")+"\n";
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
+  a.download = `stock-planta-imm-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+});
+
+/* ---- conexión Firebase ---- */
+/* Configuración del proyecto Firebase "Gestion de Stock - IMM" */
+const firebaseConfig = {
+  apiKey: "AIzaSyC9ITHpaiFW3yhHmxj-UzDjnA7iykR14k0",
+  authDomain: "gestion-de-stock---imm.firebaseapp.com",
+  projectId: "gestion-de-stock---imm",
+  storageBucket: "gestion-de-stock---imm.firebasestorage.app",
+  messagingSenderId: "677652924254",
+  appId: "1:677652924254:web:f01cc5962a208b4a4b71cf"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+db = firebase.firestore();
+let unsubs = [];
+
+$("#loginBtn").onclick = async ()=>{
+  try { await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()); }
+  catch(e){ flash("#loginMsg","No se pudo ingresar: "+(e.message||e.code),"err"); }
+};
+$("#logoutBtn").onclick = ()=>auth.signOut();
+
+auth.onAuthStateChanged(u=>{
+  unsubs.forEach(f=>f()); unsubs = [];
+  $("#loginScreen").hidden = !!u; $("#app").hidden = !u;
+  if (!u) return;
+  myId = u.uid; myName = u.displayName || u.email;
+  $("#userName").textContent = myName;
+  const live = () => { $("#sync").textContent = "En vivo · " + new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}); };
+  const onErr = e => { $("#sync").textContent = e?.code==="permission-denied" ? "Tu usuario no tiene acceso. Pedíselo al administrador." : "Conexión interrumpida. Recargá la página."; };
+  unsubs.push(db.collection("clients").onSnapshot(s=>{ state.clients = s.docs.map(d=>({id:d.id, ...d.data()})); render(); }, onErr));
+  unsubs.push(db.collection("items").onSnapshot(s=>{ state.items = s.docs.map(d=>({id:d.id, ...d.data()})); $("#importWrap").hidden = s.size>0; render(); live(); }, onErr));
+  unsubs.push(db.collection("movs").onSnapshot(s=>{ state.movs = s.docs.map(d=>({id:d.id, ...d.data()})); render(); live(); }, onErr));
+});
+
+/* Importación inicial: solo aparece cuando la base está vacía */
+$("#importFile").addEventListener("change", async e=>{
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text()); let n = 0, batch = db.batch(), k = 0;
+    for (const col of ["clients","items","movs"]) for (const [id,doc] of Object.entries(data[col]||{})){
+      batch.set(db.collection(col).doc(id), doc); n++; k++;
+      if (k===450){ await batch.commit(); batch = db.batch(); k = 0; }
+    }
+    if (k) await batch.commit();
+    $("#sync").textContent = `Importados ${n} registros.`;
+  } catch(err){ $("#sync").textContent = "No se pudo importar: " + (err.message||err.code); }
+});
+render();
+</script>
+</body>
+</html>
