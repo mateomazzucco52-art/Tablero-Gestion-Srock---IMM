@@ -705,7 +705,7 @@ render();
 <script type="module">
 /* Lectura de fotos con Gemini (Firebase AI Logic). Requiere App Check con Fraud Defense (reCAPTCHA Enterprise). */
 const RECAPTCHA_SITE_KEY = "6Lca9PAtAAAAADt-i9YyUVr1g359h8QFb5jnZbso";
-const MODELO = "gemini-3.8-flash";
+const MODELOS = ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3-flash", "gemini-2.5-flash"]; // si uno está saturado, prueba el siguiente
 const V = "12.0.0";
 try {
   const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
@@ -715,7 +715,8 @@ try {
     const app = initializeApp(window.firebaseConfig, "ia");
     initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
     const ai = getAI(app, { backend: new GoogleAIBackend() });
-    const model = getGenerativeModel(ai, { model: MODELO, generationConfig: { responseMimeType: "application/json" } });
+    const modelos = MODELOS.map(m => getGenerativeModel(ai, { model: m, generationConfig: { responseMimeType: "application/json" } }));
+    const espera = ms => new Promise(r => setTimeout(r, ms));
     window.leerProgramaFoto = async (base64, piezas, lunes) => {
       const prompt = `Sos un asistente que lee la "Planilla de Producción Semanal" de IMM Autopartes (foto, puede estar rotada).
 La planilla tiene filas de piezas y columnas de semanas (fecha de inicio de cada semana en el encabezado). Los valores son PIEZAS POR DÍA, escritos a mano.
@@ -730,8 +731,17 @@ Asociá cada fila de la planilla con el id de la lista de piezas. Equivalencias 
 Lista de piezas: ${JSON.stringify(piezas)}
 Respondé SOLO JSON con este formato:
 {"lunes":"YYYY-MM-DD (lunes de la semana leída)","filas":[{"pieza_id":"...","cantidad":0}],"dudas":["texto corto por cada número o fila que no se leyó con seguridad"]}`;
-      const res = await model.generateContent([prompt, { inlineData: { mimeType: "image/jpeg", data: base64 } }]);
-      return JSON.parse(res.response.text());
+      let ultimoError;
+      for (let vuelta = 0; vuelta < 3; vuelta++) {
+        for (const model of modelos) {
+          try {
+            const res = await model.generateContent([prompt, { inlineData: { mimeType: "image/jpeg", data: base64 } }]);
+            return JSON.parse(res.response.text());
+          } catch (e) { ultimoError = e; console.warn("Modelo falló, probando otro:", e.message); }
+        }
+        await espera(4000 * (vuelta + 1));
+      }
+      throw new Error("Los modelos de IA están saturados en este momento. Probá de nuevo en unos minutos. (" + (ultimoError?.message || "") + ")");
     };
   }
 } catch (e) { console.warn("IA no disponible", e); }
