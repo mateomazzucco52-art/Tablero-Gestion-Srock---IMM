@@ -705,7 +705,7 @@ render();
 <script type="module">
 /* Lectura de fotos con Gemini (Firebase AI Logic). Requiere App Check con Fraud Defense (reCAPTCHA Enterprise). */
 const RECAPTCHA_SITE_KEY = "6Lca9PAtAAAAADt-i9YyUVr1g359h8QFb5jnZbso";
-const MODELOS = ["gemini-3.8-flash", "gemini-3.8-flash-lite", "gemini-3-flash", "gemini-2.5-flash"]; // si uno está saturado, prueba el siguiente
+const MODELOS = ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"]; // si uno está saturado, prueba el siguiente
 const V = "12.0.0";
 try {
   const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
@@ -731,17 +731,21 @@ Asociá cada fila de la planilla con el id de la lista de piezas. Equivalencias 
 Lista de piezas: ${JSON.stringify(piezas)}
 Respondé SOLO JSON con este formato:
 {"lunes":"YYYY-MM-DD (lunes de la semana leída)","filas":[{"pieza_id":"...","cantidad":0}],"dudas":["texto corto por cada número o fila que no se leyó con seguridad"]}`;
-      let ultimoError;
+      const errores = {};
       for (let vuelta = 0; vuelta < 3; vuelta++) {
         for (const model of modelos) {
           try {
             const res = await model.generateContent([prompt, { inlineData: { mimeType: "image/jpeg", data: base64 } }]);
             return JSON.parse(res.response.text());
-          } catch (e) { ultimoError = e; console.warn("Modelo falló, probando otro:", e.message); }
+          } catch (e) {
+            const m = (e.message || "").match(/\[(\d{3})/); errores[model.model] = m ? m[1] : "error";
+            console.warn("Modelo falló, probando otro:", e.message);
+          }
         }
         await espera(4000 * (vuelta + 1));
       }
-      throw new Error("Los modelos de IA están saturados en este momento. Probá de nuevo en unos minutos. (" + (ultimoError?.message || "") + ")");
+      const det = Object.entries(errores).map(([k,v]) => k.split("/").pop() + ": " + v).join(", ");
+      throw new Error("Los modelos de IA están saturados en este momento. Probá de nuevo en unos minutos. (" + det + ")");
     };
   }
 } catch (e) { console.warn("IA no disponible", e); }
