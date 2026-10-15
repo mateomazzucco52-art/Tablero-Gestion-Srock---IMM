@@ -163,6 +163,7 @@ input,select{border:1px solid var(--line);background:var(--bg);border-radius:6px
           <button role="tab" aria-selected="true" id="tabMov">Registrar movimiento</button>
           <button role="tab" aria-selected="false" id="tabItem">Pieza</button>
           <button role="tab" aria-selected="false" id="tabCl">Clientes</button>
+          <button role="tab" aria-selected="false" id="tabPr">Programa</button>
         </div>
 
         <form id="movForm" autocomplete="off">
@@ -219,6 +220,28 @@ input,select{border:1px solid var(--line);background:var(--bg);border-radius:6px
           <div class="msg" id="clMsg"></div>
           <div class="cl-list" id="clList"></div>
         </form>
+
+        <form id="prForm" autocomplete="off" hidden>
+          <p class="hint">Cargá el programa semanal (piezas por día). Al terminar cada día hábil, el tablero registra solo la producción programada y, para Toyota, el despacho estimado (programa ÷ 1,43). Si hubo un imprevisto, anulá el movimiento automático y cargá el real.</p>
+          <label>Lunes de la semana<input id="prLunes" type="date" required></label>
+          <div class="seg" id="prDias" style="grid-template-columns:repeat(5,1fr)">
+            <button type="button" aria-pressed="true" data-d="0">Lun</button>
+            <button type="button" aria-pressed="true" data-d="1">Mar</button>
+            <button type="button" aria-pressed="true" data-d="2">Mié</button>
+            <button type="button" aria-pressed="true" data-d="3">Jue</button>
+            <button type="button" aria-pressed="true" data-d="4">Vie</button>
+          </div>
+          <p class="hint">Desmarcá los feriados.</p>
+          <label class="btn" style="display:inline-flex;justify-content:center" id="prFotoWrap">📷 Leer foto del programa<input type="file" id="prFoto" accept="image/*" capture="environment" hidden></label>
+          <div class="msg" id="prIaMsg"></div>
+          <input id="prQ" type="search" placeholder="Filtrar piezas" aria-label="Filtrar piezas">
+          <div id="prList" style="display:grid;gap:6px;max-height:340px;overflow:auto"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn primary" type="submit">Guardar programa</button>
+            <label class="btn" style="display:inline-flex">Cargar desde archivo<input type="file" id="prFile" accept=".json" hidden></label>
+          </div>
+          <div class="msg" id="prMsg"></div>
+        </form>
       </section>
     </aside>
   </div>
@@ -243,7 +266,7 @@ const MOV = {
   scrap:{lbl:"Scrap", eff:"− Materia prima (pieza perdida en proceso)", lote:"Causa", cls:"mv-out"},
   ajuste:{lbl:"Ajuste", eff:"± Conteo físico en la etapa elegida", lote:"Lote", cls:"mv-adj"}
 };
-const state = {clients:[], items:[], movs:[], q:"", client:"", alert:false, movType:"recepcion", editing:null, canWrite:true, names:{}};
+const state = {programas:[], loaded:{items:false,movs:false,programas:false}, clients:[], items:[], movs:[], q:"", client:"", alert:false, movType:"recepcion", editing:null, canWrite:true, names:{}};
 let db = null, user = null, myId = null, myName = "";
 const fmt = n => (Math.round(n*10)/10).toLocaleString("es-AR");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -404,12 +427,13 @@ $("#movType").addEventListener("click", e=>{
 $("#movItem").addEventListener("change", ()=>updateHint());
 
 function showTab(which){
-  [["mov","#tabMov","#movForm"],["item","#tabItem","#itemForm"],["cl","#tabCl","#clForm"]].forEach(([k,t,f])=>{
+  [["mov","#tabMov","#movForm"],["item","#tabItem","#itemForm"],["cl","#tabCl","#clForm"],["pr","#tabPr","#prForm"]].forEach(([k,t,f])=>{
     $(t).setAttribute("aria-selected", k===which); $(f).hidden = k!==which; });
 }
 $("#tabMov").onclick = ()=>showTab("mov");
 $("#tabItem").onclick = ()=>showTab("item");
 $("#tabCl").onclick = ()=>showTab("cl");
+$("#tabPr").onclick = ()=>{ showTab("pr"); if (!$("#prLunes").value) $("#prLunes").value = isoDate(mondayOf(new Date())); loadPrograma(); };
 $("#clStrip").addEventListener("click", e=>{ const b=e.target.closest(".cl"); if(!b) return;
   state.client = state.client===b.dataset.cl ? "" : b.dataset.cl; render(); });
 $("#clForm").addEventListener("submit", async e=>{
@@ -514,9 +538,122 @@ $("#exportBtn").addEventListener("click", async ()=>{
   document.body.appendChild(a); a.click(); a.remove();
 });
 
+/* ---- programa semanal y producción automática ---- */
+const TOYOTA_FACTOR = 1.43;
+const isoDate = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const parseISO = s => { const [y,m,d] = s.split("-").map(Number); return new Date(y, m-1, d); };
+const mondayOf = d => { const x = new Date(d); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return x; };
+const atTime = (iso,h,m) => { const d = parseISO(iso); d.setHours(h,m,0,0); return d.getTime(); };
+
+function loadPrograma(){
+  const lunes = $("#prLunes").value; if (!lunes) return;
+  const pr = state.programas.find(p=>p.id===lunes);
+  const dias = pr ? pr.dias : null;
+  document.querySelectorAll("#prDias button").forEach(b=>{
+    const iso = isoDate(new Date(parseISO(lunes).getTime() + (+b.dataset.d)*864e5 + 3600e3));
+    b.dataset.iso = iso; b.setAttribute("aria-pressed", dias ? dias.includes(iso) : true);
+  });
+  const q = ($("#prQ").value||"").toLowerCase();
+  const items = [...state.items].filter(it=>it.client).sort((a,b)=>(a.client).localeCompare(b.client)||a.code.localeCompare(b.code))
+    .filter(it=>!q || (it.code+" "+it.name+" "+it.client).toLowerCase().includes(q));
+  $("#prList").innerHTML = items.map(it=>`<label style="display:grid;grid-template-columns:1fr 90px;gap:8px;align-items:center;color:var(--fg);font-weight:400">
+    <span>${esc(it.name)} <span class="code">${esc(it.client)}</span></span>
+    <input type="number" min="0" step="1" data-item="${esc(it.id)}" value="${pr && pr.qty[it.id] ? pr.qty[it.id] : ""}" placeholder="0"></label>`).join("");
+}
+$("#prLunes").addEventListener("change", ()=>{ const d = mondayOf(parseISO($("#prLunes").value)); $("#prLunes").value = isoDate(d); loadPrograma(); });
+$("#prQ").addEventListener("input", loadPrograma);
+$("#prDias").addEventListener("click", e=>{ const b=e.target.closest("button"); if(b) b.setAttribute("aria-pressed", b.getAttribute("aria-pressed")!=="true"); });
+
+async function savePrograma(lunes, dias, qty){
+  await db.collection("programas").doc(lunes).set({lunes, dias, qty});
+  for (const [id,n] of Object.entries(qty)){
+    const it = state.items.find(i=>i.id===id); if (!it || !n) continue;
+    const dem = it.client==="Toyota" ? Math.round(n/TOYOTA_FACTOR) : n;
+    if (dem !== it.dem) await db.collection("items").doc(id).update({dem});
+  }
+}
+$("#prForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  const lunes = $("#prLunes").value;
+  const dias = [...document.querySelectorAll("#prDias button")].filter(b=>b.getAttribute("aria-pressed")==="true").map(b=>b.dataset.iso);
+  const prev = state.programas.find(p=>p.id===lunes);
+  const qty = {...(prev ? prev.qty : {})};
+  document.querySelectorAll("#prList input").forEach(inp=>{ const n = Math.round(+inp.value||0); if (n) qty[inp.dataset.item]=n; else delete qty[inp.dataset.item]; });
+  try { await savePrograma(lunes, dias, qty); flash("#prMsg","Programa guardado. Los días que ya pasaron se cargan solos.","ok"); }
+  catch(err){ flash("#prMsg", errText(err), "err"); }
+});
+$("#prFile").addEventListener("change", async e=>{
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    for (const pr of (data.programas || [data])) await savePrograma(pr.lunes, pr.dias, pr.qty);
+    flash("#prMsg","Programa cargado desde archivo.","ok"); $("#prLunes").value = (data.programas||[data])[0].lunes; loadPrograma();
+  } catch(err){ flash("#prMsg","No se pudo leer el archivo: "+(err.message||err.code),"err"); }
+  e.target.value = "";
+});
+
+/* ---- lectura de foto con IA (Gemini vía Firebase AI Logic) ---- */
+async function achicarImagen(file){
+  const img = await createImageBitmap(file); const max = 1600;
+  const k = Math.min(1, max/Math.max(img.width, img.height));
+  const c = document.createElement("canvas"); c.width = Math.round(img.width*k); c.height = Math.round(img.height*k);
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL("image/jpeg", 0.85).split(",")[1];
+}
+$("#prFoto").addEventListener("change", async e=>{
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  if (!window.leerProgramaFoto) return flash("#prIaMsg","La lectura con IA todavía no está configurada.","err");
+  const lunes = $("#prLunes").value || isoDate(mondayOf(new Date()));
+  flash("#prIaMsg","Leyendo la foto… puede tardar unos segundos.","");
+  try {
+    const piezas = state.items.filter(i=>i.client).map(i=>({id:i.id, codigo:i.code, nombre:i.name, cliente:i.client}));
+    const r = await window.leerProgramaFoto(await achicarImagen(f), piezas, lunes);
+    if (r.lunes) { $("#prLunes").value = isoDate(mondayOf(parseISO(r.lunes))); }
+    loadPrograma();
+    const leidas = r.filas || []; let n = 0;
+    document.querySelectorAll("#prList input").forEach(inp=>{ inp.value = ""; inp.style.outline = ""; });
+    for (const fila of leidas) {
+      const inp = document.querySelector(`#prList input[data-item="${CSS.escape(fila.pieza_id)}"]`);
+      if (inp && fila.cantidad > 0) { inp.value = Math.round(fila.cantidad); inp.style.outline = "2px solid var(--warn)"; n++; }
+    }
+    const dudas = (r.dudas||[]).length ? " Dudas: " + r.dudas.join(" · ") : "";
+    flash("#prIaMsg", `Leí ${n} piezas (marcadas en amarillo). Revisalas, desmarcá feriados y tocá "Guardar programa".${dudas}`, "ok");
+  } catch(err){ flash("#prIaMsg","No se pudo leer la foto: "+(err.message||err.code||err),"err"); }
+});
+
+let autoRunning = false;
+async function autoGenerate(){
+  if (autoRunning || !state.loaded.items || !state.loaded.movs || !state.loaded.programas) return;
+  autoRunning = true;
+  try {
+    const today = isoDate(new Date()); let batch = db.batch(), n = 0;
+    const has = (id,tipo,iso) => { const a = atTime(iso,0,0), b = atTime(iso,23,59)+60e3;
+      return state.movs.some(m=>m.item===id && m.tipo===tipo && m.ts>=a && m.ts<b); };
+    for (const pr of state.programas) for (const iso of pr.dias) {
+      if (iso >= today) continue;
+      for (const [id,q] of Object.entries(pr.qty||{})) {
+        const it = state.items.find(i=>i.id===id); if (!it || !q) continue;
+        const base = {uid:"auto", uname:"Automático (programa)"};
+        if (!has(id,"produccion",iso)) {
+          batch.set(db.collection("movs").doc(`auto-aj-${id}-${iso}`), {...base, item:id, tipo:"ajuste", etapa:"MP", cant:q, nota:`Supuesto: MP para programa del ${iso} (reemplazar por conteo real)`, ts:atTime(iso,6,0)});
+          batch.set(db.collection("movs").doc(`auto-pr-${id}-${iso}`), {...base, item:id, tipo:"produccion", cant:q, lote:`PROG-${iso}`, nota:"Programa semanal", ts:atTime(iso,23,30)});
+          n += 2;
+        }
+        if (it.client==="Toyota" && !has(id,"despacho",iso)) {
+          batch.set(db.collection("movs").doc(`auto-dz-${id}-${iso}`), {...base, item:id, tipo:"despacho", cant:Math.round(q/TOYOTA_FACTOR), lote:`EST-${iso}`, nota:"Estimado: retiro Toyota = programa ÷ 1,43", ts:atTime(iso,23,45)});
+          n++;
+        }
+        if (n >= 400) { await batch.commit(); batch = db.batch(); n = 0; }
+      }
+    }
+    if (n) await batch.commit();
+  } catch(err){ console.warn("auto", err); }
+  autoRunning = false;
+}
+
 /* ---- conexión Firebase ---- */
 /* Configuración del proyecto Firebase "Gestion de Stock - IMM" */
-const firebaseConfig = {
+window.firebaseConfig = {
   apiKey: "AIzaSyC9ITHpaiFW3yhHmxj-UzDjnA7iykR14k0",
   authDomain: "gestion-de-stock---imm.firebaseapp.com",
   projectId: "gestion-de-stock---imm",
@@ -524,7 +661,7 @@ const firebaseConfig = {
   messagingSenderId: "677652924254",
   appId: "1:677652924254:web:f01cc5962a208b4a4b71cf"
 };
-firebase.initializeApp(firebaseConfig);
+firebase.initializeApp(window.firebaseConfig);
 const auth = firebase.auth();
 db = firebase.firestore();
 let unsubs = [];
@@ -544,8 +681,9 @@ auth.onAuthStateChanged(u=>{
   const live = () => { $("#sync").textContent = "En vivo · " + new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}); };
   const onErr = e => { $("#sync").textContent = e?.code==="permission-denied" ? "Tu usuario no tiene acceso. Pedíselo al administrador." : "Conexión interrumpida. Recargá la página."; };
   unsubs.push(db.collection("clients").onSnapshot(s=>{ state.clients = s.docs.map(d=>({id:d.id, ...d.data()})); render(); }, onErr));
-  unsubs.push(db.collection("items").onSnapshot(s=>{ state.items = s.docs.map(d=>({id:d.id, ...d.data()})); $("#importWrap").hidden = s.size>0; render(); live(); }, onErr));
-  unsubs.push(db.collection("movs").onSnapshot(s=>{ state.movs = s.docs.map(d=>({id:d.id, ...d.data()})); render(); live(); }, onErr));
+  unsubs.push(db.collection("items").onSnapshot(s=>{ state.items = s.docs.map(d=>({id:d.id, ...d.data()})); state.loaded.items = true; $("#importWrap").hidden = s.size>0; render(); live(); autoGenerate(); }, onErr));
+  unsubs.push(db.collection("movs").onSnapshot(s=>{ state.movs = s.docs.map(d=>({id:d.id, ...d.data()})); state.loaded.movs = true; render(); live(); autoGenerate(); }, onErr));
+  unsubs.push(db.collection("programas").onSnapshot(s=>{ state.programas = s.docs.map(d=>({id:d.id, ...d.data()})); state.loaded.programas = true; if (!$("#prForm").hidden) loadPrograma(); autoGenerate(); }, onErr));
 });
 
 /* Importación inicial: solo aparece cuando la base está vacía */
@@ -562,6 +700,41 @@ $("#importFile").addEventListener("change", async e=>{
   } catch(err){ $("#sync").textContent = "No se pudo importar: " + (err.message||err.code); }
 });
 render();
+</script>
+
+<script type="module">
+/* Lectura de fotos con Gemini (Firebase AI Logic). Requiere App Check con reCAPTCHA v3. */
+const RECAPTCHA_SITE_KEY = "PEGAR_CLAVE_DE_SITIO_RECAPTCHA";
+const MODELO = "gemini-3.8-flash";
+const V = "12.0.0";
+try {
+  const { initializeApp } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app.js`);
+  const { initializeAppCheck, ReCaptchaV3Provider } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-app-check.js`);
+  const { getAI, getGenerativeModel, GoogleAIBackend } = await import(`https://www.gstatic.com/firebasejs/${V}/firebase-ai.js`);
+  if (!RECAPTCHA_SITE_KEY.startsWith("PEGAR")) {
+    const app = initializeApp(window.firebaseConfig, "ia");
+    initializeAppCheck(app, { provider: new ReCaptchaV3Provider(RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true });
+    const ai = getAI(app, { backend: new GoogleAIBackend() });
+    const model = getGenerativeModel(ai, { model: MODELO, generationConfig: { responseMimeType: "application/json" } });
+    window.leerProgramaFoto = async (base64, piezas, lunes) => {
+      const prompt = `Sos un asistente que lee la "Planilla de Producción Semanal" de IMM Autopartes (foto, puede estar rotada).
+La planilla tiene filas de piezas y columnas de semanas (fecha de inicio de cada semana en el encabezado). Los valores son PIEZAS POR DÍA, escritos a mano.
+Leé SOLO la columna de la semana que empieza alrededor del ${lunes} (si no la encontrás, usá la columna más a la derecha que tenga números escritos a mano).
+Un guion "-" o celda vacía significa 0 (no la incluyas).
+Asociá cada fila de la planilla con el id de la lista de piezas. Equivalencias conocidas:
+- "MQ 200 - ENG. LIBRE DE 5ta" → i-MQ200-EL5; "MQ200 - CUERPO DE ACOPLE" → i-MQ200-CA; "MQ200 - ENG. LIBRE DE 1ra" → i-MQ200-EL1
+- "BRACKET, ENGINE (RH y LH)" → misma cantidad para i-BEM-RH y para i-BEM-LH
+- "PLATE, STIFFENER (RH y LH)" → misma cantidad para i-PS-RH y para i-PS-LH
+- "BRACKET SUB-ASSY, ALTERNADOR" → i-BR-ALT; "STAY, MANIFOLD" → p00; "KK10 - D END RR AXLE HOUSING" → i-KK10; "KK20 - KK50 ..." → i-KK20
+- "MAZA SMORZANTE" → i-MAZZA-SM; "9001" → i-129001; "JD" → i-JD-001; "9013" → i-129013; "9005" → i-129005; "BUJE" → i-129020; "BRIDA" → i-129030; "Múltiple de escape" → i-MULT-ESC
+Lista de piezas: ${JSON.stringify(piezas)}
+Respondé SOLO JSON con este formato:
+{"lunes":"YYYY-MM-DD (lunes de la semana leída)","filas":[{"pieza_id":"...","cantidad":0}],"dudas":["texto corto por cada número o fila que no se leyó con seguridad"]}`;
+      const res = await model.generateContent([prompt, { inlineData: { mimeType: "image/jpeg", data: base64 } }]);
+      return JSON.parse(res.response.text());
+    };
+  }
+} catch (e) { console.warn("IA no disponible", e); }
 </script>
 </body>
 </html>
