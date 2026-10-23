@@ -155,7 +155,7 @@ td{padding:6px;border-bottom:1px solid var(--line)} .r{text-align:right}
   <div class="appbar-in">
     <div class="brandmark">
       <span class="logo">IMM</span>
-      <div><div class="t">Almacén 3D</div><div class="st">Producto terminado y expedición</div></div>
+      <div><div class="t">Almacén 3D</div><div class="st">PT, expedición y forjas</div></div>
     </div>
     <span class="sync" id="sync">Conectando…</span>
     <button class="btn primary" id="scanBtn" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 12h10"/></svg>Escanear</button>
@@ -169,9 +169,13 @@ td{padding:6px;border-bottom:1px solid var(--line)} .r{text-align:right}
   <div class="viewer" id="viewer">
     <canvas id="cv" aria-label="Vista 3D del almacén de producto terminado"></canvas>
     <div class="vtools">
+      <button class="btn" data-zone="pt" aria-pressed="true">Depósito PT</button>
+      <button class="btn" data-zone="forjas" aria-pressed="false">Forjas</button>
+      <button class="btn" data-zone="all" aria-pressed="false">Todo</button>
+      <span style="width:6px"></span>
       <button class="btn" data-view="3d" aria-pressed="true">3D</button>
       <button class="btn" data-view="top" aria-pressed="false">Planta</button>
-      <button class="btn" id="fitBtn">Centrar</button>
+      <button class="btn" id="wallBtn" aria-pressed="true">Paredes</button>
     </div>
     <div class="legend" id="legend"></div>
     <div class="tip" id="tip" hidden></div>
@@ -197,8 +201,8 @@ td{padding:6px;border-bottom:1px solid var(--line)} .r{text-align:right}
     <div class="pane" id="p-resumen" hidden>
       <div class="kpis" id="kpis"></div>
       <div>
-        <h2>Sistema vs. racks</h2>
-        <p class="hint" style="margin-top:4px">PT según el tablero de stock comparado con lo ubicado en el almacén. Una diferencia indica pallets sin ubicar o datos a corregir.</p>
+        <h2>Sistema vs. ubicado</h2>
+        <p class="hint" style="margin-top:4px">PT del tablero contra los racks de PT, y MP contra los racks de forjas (solo de las piezas ubicadas ahí). Una diferencia indica pallets sin ubicar o datos a corregir.</p>
       </div>
       <div style="overflow:auto"><table><thead><tr><th>Pieza</th><th class="r">Sistema</th><th class="r">Racks</th><th class="r">Dif.</th></tr></thead><tbody id="concBody"></tbody></table></div>
       <h2>Últimos movimientos</h2>
@@ -267,12 +271,20 @@ const DEFAULT_LAYOUT = [
   {id:"H", sector:"Abajo",  x:3.97, z:13.15, dir:"z", n:3, niv:4, largo:3.64, prof:1.43},
   {id:"I", sector:"Abajo",  x:0,    z:16.79, dir:"x", n:4, niv:4, largo:5.4,  prof:1.42},
   // Expedición: franja de 5,9 x 3 m, lugares de piso
-  {id:"EXP", sector:"Expedición", x:-12.6, z:5.3, dir:"x", n:4, niv:1, largo:5.4, prof:1.2, piso:true}
+  {id:"EXP", sector:"Expedición", x:-12.6, z:5.3, dir:"x", n:4, niv:1, largo:5.4, prof:1.2, piso:true},
+  // Forjas (MP): depósitos laterales afuera de la pared este, una fila de racks de 3 niveles cada uno
+  {id:"FA", sector:"Forjas", nombre:"Forja 1", x:5.89, z:14.82, dir:"z", n:7,  niv:3, largo:14.0, prof:1.5, y0:0.45, lh:1.15, alto:0.75},
+  {id:"FB", sector:"Forjas", nombre:"Forja 2", x:5.89, z:34.84, dir:"z", n:7,  niv:3, largo:13.7, prof:1.5, y0:0.45, lh:1.15, alto:0.75},
+  {id:"FC", sector:"Forjas", nombre:"Forja 3", x:5.89, z:54.21, dir:"z", n:10, niv:3, largo:18.8, prof:1.5, y0:0.45, lh:1.15, alto:0.75}
 ];
+const isForja = r => r.sector==="Forjas";
+const levelY = (r,l) => (+r.y0||0) + (l-1)*(+r.lh||LH);
+const slotH = r => Math.min(1.25, (+r.lh||LH) - 0.1);
+const rackH = r => levelY(r, Math.max(1,+r.niv||1)) + (+r.alto||1.35);
 const codeOf = (r, p, l) => r.piso ? `${r.id}-${p}` : `${r.id}${p}-${l}`;
 
 /* ---------- estado ---------- */
-const state = { items:[], movs:[], ubic:{}, hist:[], layout:structuredClone(DEFAULT_LAYOUT), sel:null, q:"", tab:"ubic", view:"3d", pendingLoc:null };
+const state = { items:[], movs:[], ubic:{}, hist:[], layout:structuredClone(DEFAULT_LAYOUT), sel:null, q:"", tab:"ubic", view:"3d", zone:"pt", walls:true, pendingLoc:null };
 let db=null, myName="", draftLayout=null;
 
 /* ---------- colores por cliente ---------- */
@@ -300,6 +312,7 @@ const MAT = {
   upright: new THREE.MeshLambertMaterial({color:0x2f5f9e}),
   beam: new THREE.MeshLambertMaterial({color:0xe2701e}),
   pallet: new THREE.MeshLambertMaterial({color:0xb08a5a}),
+  deck: new THREE.MeshLambertMaterial({color:0x8a949d}),
   hit: new THREE.MeshBasicMaterial({transparent:true, opacity:0, depthWrite:false})
 };
 const slots = new Map();      // code -> {rack,p,l,center,size,hit,load}
@@ -318,7 +331,7 @@ function label(text, {size=64, color="#1c222b", bg=null, w=1.6}={}){
   if (bg){ ctx.fillStyle = bg; ctx.beginPath(); ctx.roundRect(0,0,c.width,c.height,size*0.3); ctx.fill(); }
   ctx.fillStyle = color; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(text, c.width/2, c.height/2+2);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({map:tex, depthTest:false}));
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map:tex}));
   s.scale.set(w*c.width/c.height*0.5, w*0.5, 1); s.renderOrder = 10; return s;
 }
 function floorText(text, x, z, w, color){
@@ -331,6 +344,101 @@ function floorText(text, x, z, w, color){
 function box(w,h,d,mat,x,y,z){ const m = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat); m.position.set(x,y,z); return m; }
 const slotW = r => (+r.largo > 0 ? +r.largo : (+r.n||1)*W) / Math.max(1, +r.n||1);
 const dep = r => +r.prof > 0 ? +r.prof : D;
+
+/* ---------- entorno tomado de la maqueta (coordenadas locales del depósito, metros) ---------- */
+const NAVE = {x0:-18.0, x1:5.69, z0:-1.02, z1:18.55};
+const FORJAS = [{zs:13.82, L:15.15, nombre:"Forja 1"}, {zs:33.64, L:15.0, nombre:"Forja 2"}, {zs:53.31, L:19.9, nombre:"Forja 3"}];
+const GAPS_ESTE = [[9.15,13.82],[28.97,33.64],[48.64,53.31],[73.21,77.88]];
+let cutGroups = [];   // paredes que se ocultan cuando quedan entre la cámara y los racks
+let chapaTex = null;
+function chapaTexture(){
+  if (chapaTex) return chapaTex;
+  const c = document.createElement("canvas"); c.width=64; c.height=8; const g = c.getContext("2d");
+  const gr = g.createLinearGradient(0,0,64,0); gr.addColorStop(0,"#9aa4ae"); gr.addColorStop(.35,"#c9d1d8"); gr.addColorStop(.5,"#7f8993"); gr.addColorStop(.7,"#b4bdc5"); gr.addColorStop(1,"#9aa4ae");
+  g.fillStyle=gr; g.fillRect(0,0,64,8); chapaTex = new THREE.CanvasTexture(c); chapaTex.wrapS = chapaTex.wrapT = THREE.RepeatWrapping; chapaTex.colorSpace = THREE.SRGBColorSpace; return chapaTex;
+}
+function chapa(x0,x1,z0,z1,y0,y1){
+  const w=x1-x0, d=z1-z0, len=Math.max(w,d), t=chapaTexture().clone(); t.needsUpdate=true; t.repeat.set(len/0.2,1);
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w,y1-y0,d), new THREE.MeshLambertMaterial({map:t}));
+  m.position.set((x0+x1)/2,(y0+y1)/2,(z0+z1)/2); return m;
+}
+function slab(x0,x1,z0,z1,y,color,h=0.02){ const m = new THREE.Mesh(new THREE.BoxGeometry(x1-x0,h,z1-z0), new THREE.MeshLambertMaterial({color})); m.position.set((x0+x1)/2,y+h/2,(z0+z1)/2); return m; }
+function frame(g,x0,x1,z0,z1,color,t=0.08){ for (const [a,b,c,d] of [[x0,x1,z0,z0+t],[x0,x1,z1-t,z1],[x0,x0+t,z0,z1],[x1-t,x1,z0,z1]]) g.add(slab(a,b,c,d,0.012,color,0.012)); }
+function wallSide(nx,nz,px,pz){ const g = new THREE.Group(); g.userData.n = new THREE.Vector3(nx,0,nz); g.userData.p = new THREE.Vector3(px,0,pz); cutGroups.push(g); return g; }
+function leaf(g,x0,x1,z0,z1,h){ // hoja de portón corredizo con nervios
+  g.add(slab(x0,x1,z0,z1,0,0x4f7396,h));
+  const along = (x1-x0) > (z1-z0);
+  for (let i=1;i<Math.round(h/0.55);i++) g.add(slab(along?x0:x0-0.02, along?x1:x1+0.02, along?z0-0.02:z0, along?z1+0.02:z1, i*0.55, 0x3c5a78, 0.04));
+}
+function buildEnv(dark){
+  cutGroups = [];
+  const env = new THREE.Group(); world.add(env);
+  const walls = new THREE.Group(); walls.visible = state.walls; walls.userData.walls = true; env.add(walls);
+  // terreno, piso de la nave y platea de hormigón de los depósitos del este
+  env.add(slab(-40, 40, -25, 95, -0.06, dark?0x1c232c:0xc9ced4, 0.04));
+  env.add(slab(NAVE.x0, NAVE.x1, NAVE.z0, 80, -0.02, dark?0x2b333d:0x9fa6ae, 0.02));
+  env.add(slab(NAVE.x1, NAVE.x1+6, NAVE.z0, 77.9, -0.02, dark?0x333b46:0xadb2b8, 0.03));
+  // paredes de la nave (8 m, chapa)
+  const H = 8;
+  const N = wallSide(0,-1, 0, NAVE.z0); walls.add(N);
+  N.add(chapa(NAVE.x0, -7.24, NAVE.z0, NAVE.z0+0.19, 0, H), chapa(-0.24, NAVE.x1, NAVE.z0, NAVE.z0+0.19, 0, H), chapa(-7.24, -0.24, NAVE.z0, NAVE.z0+0.19, 6.2, H));
+  leaf(N, -7.24, -3.74, NAVE.z0+0.2, NAVE.z0+0.27, 6.1);
+  const Wst = wallSide(-1,0, NAVE.x0, 0); walls.add(Wst); Wst.add(chapa(NAVE.x0-0.19, NAVE.x0, NAVE.z0, NAVE.z1, 0, H));
+  const S = wallSide(0,1, 0, NAVE.z1); walls.add(S);
+  S.add(chapa(NAVE.x0, -6.24, NAVE.z1-0.19, NAVE.z1, 0, H), chapa(-1.24, NAVE.x1, NAVE.z1-0.19, NAVE.z1, 0, H), chapa(-6.24, -1.24, NAVE.z1-0.19, NAVE.z1, 4.5, H));
+  leaf(S, -6.24, -3.74, NAVE.z1-0.27, NAVE.z1-0.2, 4.4);
+  const E = new THREE.Group(); walls.add(E);   // la pared este queda siempre: es el fondo de PT y de las forjas
+  let prev = NAVE.z0;
+  for (const [a,b] of GAPS_ESTE){ E.add(chapa(NAVE.x1-0.19, NAVE.x1, prev, a, 0, H), chapa(NAVE.x1-0.19, NAVE.x1, a, b, 4.5, H)); leaf(E, NAVE.x1+0.04, NAVE.x1+0.11, a, a+(b-a)/2, 4.4); prev = b; }
+  // zócalo bajo que queda siempre visible (marca el contorno cuando la pared se oculta)
+  for (const [a,b,c,d] of [[NAVE.x0,NAVE.x1,NAVE.z0,NAVE.z0+0.19],[NAVE.x0-0.19,NAVE.x0,NAVE.z0,NAVE.z1],[NAVE.x0,NAVE.x1,NAVE.z1-0.19,NAVE.z1]]) env.add(slab(a,b,c,d,0,0x7f8993,0.35));
+  // zona de viruta: platea cercada con malla y tambores negros
+  const vx0 = NAVE.x1, vx1 = NAVE.x1+6, vz0 = NAVE.z0, vz1 = 9.15;
+  env.add(slab(vx0, vx1, vz0, vz1, 0.01, 0x9aa0a6, 0.04));
+  const mc = document.createElement("canvas"); mc.width=mc.height=64; const mg = mc.getContext("2d"); mg.strokeStyle="#59636d"; mg.lineWidth=2;
+  for (let i=-64;i<=128;i+=16){ mg.beginPath(); mg.moveTo(i,0); mg.lineTo(i+64,64); mg.stroke(); mg.beginPath(); mg.moveTo(i+64,0); mg.lineTo(i,64); mg.stroke(); }
+  const mesh = (a,b,c,d) => { const len = Math.hypot(c-a,d-b), t = new THREE.CanvasTexture(mc); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(len/0.35, 2/0.35);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(len,2), new THREE.MeshBasicMaterial({map:t, transparent:true, side:THREE.DoubleSide, depthWrite:false}));
+    m.position.set((a+c)/2, 1.05, (b+d)/2); m.rotation.y = (c===a) ? Math.PI/2 : 0; env.add(m);
+    for (let i=0;i<=Math.max(1,Math.round(len/2));i++){ const k=i/Math.max(1,Math.round(len/2)); env.add(box(0.07,2.1,0.07,MAT.deck, a+(c-a)*k, 1.05, b+(d-b)*k)); } };
+  mesh(vx0,vz0,vx1,vz0); mesh(vx1,vz0,vx1,vz1); mesh(vx0,vz1,(vx0+vx1)/2-1,vz1); mesh((vx0+vx1)/2+1,vz1,vx1,vz1);
+  const drumM = new THREE.MeshLambertMaterial({color:0x14171a}), drumG = new THREE.CylinderGeometry(0.33,0.33,0.95,18);
+  for (let i=0;i<3;i++) for (let j=0;j<7;j++){ const d = new THREE.Mesh(drumG, drumM); d.position.set(vx0+0.5+i*2.5, 0.52, vz0+1.0+j*1.2); env.add(d); }
+  const tv = floorText("VIRUTA", (vx0+vx1)/2, vz1-0.6, 3, dark?"#c9d1d8":"#3b4450"); env.add(tv);
+  // depósitos de forja: platea, demarcación, paredes de chapa y portones (sin techo para ver los racks)
+  for (const f of FORJAS){
+    const x0 = NAVE.x1, x1 = NAVE.x1+6, z0 = f.zs, z1 = f.zs+f.L;
+    env.add(slab(x0, x1, z0, z1, 0.01, dark?0x3a424d:0xa9aeb3, 0.05));
+    frame(env, x0+0.05, x0+1.85, z0+0.9, z1-0.15, 0xe0b020);
+    const e = wallSide(1,0, x1, 0); walls.add(e); e.add(chapa(x1-0.1, x1, z0, z1, 0, 4.5));
+    const n = wallSide(0,-1, 0, z0); walls.add(n); n.add(chapa(x0, x0+2.0, z0-0.1, z0, 0, 4.8), chapa(x0+5.8, x1, z0-0.1, z0, 0, 4.6), chapa(x0+2.0, x0+5.8, z0-0.1, z0, 4.0, 4.7)); leaf(n, x0+3.9, x0+5.8, z0-0.18, z0-0.12, 3.95);
+    const s = wallSide(0,1, 0, z1); walls.add(s); s.add(chapa(x0, x0+2.0, z1, z1+0.1, 0, 4.8), chapa(x0+5.8, x1, z1, z1+0.1, 0, 4.6), chapa(x0+2.0, x0+5.8, z1, z1+0.1, 4.0, 4.7)); leaf(s, x0+2.0, x0+3.9, z1+0.12, z1+0.18, 3.95);
+  }
+  // demarcación amarilla de los racks de PT y de la expedición
+  frame(env, -0.1, 5.5, -0.1, 3.75, 0xe0b020); frame(env, -0.1, 5.5, 6.25, 10.1, 0xe0b020); frame(env, -0.1, 5.5, 13.05, 18.3, 0xe0b020);
+  env.add(slab(-12.8, -6.9, 4.96, 7.96, 0.004, dark?0x4a4220:0xeedc92, 0.008)); frame(env, -12.8, -6.9, 4.96, 7.96, 0xe0b020);
+  // oficina de logística (prefabricada, vidriada) y zona de carga del autoelevador
+  const of = new THREE.Group(); env.add(of);
+  of.add(slab(-17.8, -14.1, -0.83, 3.8, 0, 0xe4e8eb, 1.2));
+  const gl = new THREE.Mesh(new THREE.BoxGeometry(3.7, 1.4, 4.63), new THREE.MeshLambertMaterial({color:0x9fd0e8, transparent:true, opacity:0.35, depthWrite:false})); gl.position.set(-15.95, 1.9, 1.485); of.add(gl);
+  of.add(slab(-17.85, -14.05, -0.88, 3.85, 2.6, 0xd3d9de, 0.08));
+  const ol = label("Oficina de logística", {size:44, color:dark?"#e8ecf1":"#1c222b", w:0.9}); ol.position.set(-15.95, 3.5, 1.5); of.add(ol);
+  env.add(slab(-14.0, -12.0, -0.83, 1.8, 0.004, 0xf3e7a1, 0.008)); frame(env, -14.0, -12.0, -0.83, 1.8, 0xe0b020);
+  // autoelevador en el hueco de la U de abajo
+  const fk = new THREE.Group(); fk.position.set(2.7, 0, 14.75); fk.rotation.y = Math.PI; env.add(fk);
+  const yel = new THREE.MeshLambertMaterial({color:0xf2b705}), blk = new THREE.MeshLambertMaterial({color:0x20262d});
+  const fb = (w,h,d,x,y,z,m)=>{ const e = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); e.position.set(x,y,z); fk.add(e); };
+  fb(1.05,0.8,1.5,0,0.65,-0.1,yel); fb(1.05,0.6,0.5,0,0.55,-0.95,new THREE.MeshLambertMaterial({color:0x6b7480}));
+  for (const [x,z] of [[-0.5,0.2],[0.5,0.2],[-0.5,-0.7],[0.5,-0.7]]){ const w = new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.2,16), blk); w.rotation.z = Math.PI/2; w.position.set(x,0.28,z); fk.add(w); }
+  for (const [x,z] of [[-0.45,0.5],[0.45,0.5],[-0.45,-0.5],[0.45,-0.5]]) fb(0.05,1.1,0.05,x,1.7,z,blk);
+  fb(1.05,0.05,1.1,0,2.27,0,blk); fb(0.06,2.3,0.06,-0.3,1.15,0.8,blk); fb(0.06,2.3,0.06,0.3,1.15,0.8,blk);
+  fb(0.12,0.05,1.1,-0.28,0.1,1.35,blk); fb(0.12,0.05,1.1,0.28,0.1,1.35,blk); fb(0.7,0.4,0.06,0,0.3,0.82,blk);
+  updateCut();
+}
+// oculta las paredes cuya cara exterior mira hacia la cámara (vista en corte, como una maqueta)
+const _v = new THREE.Vector3();
+function updateCut(){ for (const g of cutGroups){ _v.copy(camera.position).sub(g.userData.p); _v.y = 0; g.visible = _v.dot(g.userData.n) <= 0.5; } }
+
 function rackDims(r){ const len = slotW(r)*Math.max(1,+r.n||1), d = dep(r); return r.dir==="x" ? {sx:len, sz:d} : {sx:d, sz:len}; }
 
 function build(){
@@ -341,7 +449,7 @@ function build(){
   for (const r of state.layout){
     const {sx, sz} = rackDims(r), W = slotW(r), D = dep(r);
     const x0 = +r.x, z0 = +r.z, niv = Math.max(1, +r.niv||1), n = Math.max(1, +r.n||1);
-    const H = r.piso ? 0 : (niv-1)*LH + 1.35;
+    const H = r.piso ? 0 : rackH(r);
     bounds.expandByPoint(new THREE.Vector3(x0, 0, z0)); bounds.expandByPoint(new THREE.Vector3(x0+sx, H, z0+sz));
     if (r.piso){
       // zona de piso: marcas amarillas
@@ -361,31 +469,29 @@ function build(){
         const px = r.dir==="x" ? x0+p*W : x0+side, pz = r.dir==="x" ? z0+side : z0+p*W;
         world.add(box(0.08, H, 0.08, MAT.upright, px, H/2, pz));
       }
-      for (let l=1; l<niv; l++) for (const side of [0, D]){
-        const y = l*LH - 0.06;
-        world.add(r.dir==="x" ? box(sx, 0.12, 0.06, MAT.beam, x0+sx/2, y, z0+side) : box(0.06, 0.12, sz, MAT.beam, x0+side, y, z0+sz/2));
+      for (let l=1; l<=niv; l++){
+        const y = levelY(r,l); if (y < 0.01) continue;
+        for (const side of [0, D]) world.add(r.dir==="x" ? box(sx, 0.12, 0.06, MAT.beam, x0+sx/2, y-0.06, z0+side) : box(0.06, 0.12, sz, MAT.beam, x0+side, y-0.06, z0+sz/2));
+        world.add(box(sx-0.04, 0.03, sz-0.04, MAT.deck, x0+sx/2, y-0.015, z0+sz/2));   // bandeja gris
       }
       const tag = label(r.id, {size:72, color:"#fff", bg:"#2f5f9e", w:1.1});
       tag.position.set(r.dir==="x" ? x0+0.4 : x0+D/2, H+0.55, r.dir==="x" ? z0+D/2 : z0+0.4); world.add(tag);
     }
     for (let p=1; p<=n; p++) for (let l=1; l<=niv; l++){
       const cx = r.dir==="x" ? x0+(p-0.5)*W : x0+sx/2, cz = r.dir==="x" ? z0+sz/2 : z0+(p-0.5)*W;
-      const y0 = (l-1)*LH, code = codeOf(r,p,l);
-      const size = new THREE.Vector3(r.dir==="x" ? W-0.12 : D-0.06, 1.25, r.dir==="x" ? D-0.06 : W-0.12);
+      const y0 = levelY(r,l), code = codeOf(r,p,l);
+      const size = new THREE.Vector3(r.dir==="x" ? W-0.12 : D-0.06, slotH(r), r.dir==="x" ? D-0.06 : W-0.12);
       const hit = box(size.x, size.y, size.z, MAT.hit, cx, y0+size.y/2, cz); hit.userData.code = code;
       world.add(hit); hitList.push(hit);
       slots.set(code, {rack:r, p, l, center:new THREE.Vector3(cx, y0+size.y/2, cz), size, y0, hit, load:null, pal:null});
     }
   }
-  const c = bounds.getCenter(new THREE.Vector3()), s = bounds.getSize(new THREE.Vector3());
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(s.x+16, s.z+16), new THREE.MeshLambertMaterial({color:cssVar("--floor")}));
-  floor.rotation.x = -Math.PI/2; floor.position.set(c.x, 0, c.z); world.add(floor);
-  const grid = new THREE.GridHelper(Math.max(s.x,s.z)+16, Math.round((Math.max(s.x,s.z)+16)/1.3), dark?0x2a333f:0xc3c9d1, dark?0x222a35:0xc9ced6);
-  grid.position.set(c.x, 0.005, c.z); world.add(grid);
-  // carteles de sector
+  buildEnv(dark);
+  // carteles de sector (PT)
   const sectors = {};
-  for (const r of state.layout) if (!r.piso){ const {sx,sz}=rackDims(r); const b = sectors[r.sector] ||= new THREE.Box3(); b.expandByPoint(new THREE.Vector3(+r.x,0,+r.z)); b.expandByPoint(new THREE.Vector3(+r.x+sx,0,+r.z+sz)); }
-  for (const [name,b] of Object.entries(sectors)){ const cc=b.getCenter(new THREE.Vector3()); world.add(floorText(`PT · ${name.toUpperCase()}`, cc.x, cc.z, 4, dark?"#5d6878":"#8d97a4")); }
+  for (const r of state.layout) if (!r.piso && !isForja(r)){ const {sx,sz}=rackDims(r); const b = sectors[r.sector] ||= new THREE.Box3(); b.expandByPoint(new THREE.Vector3(+r.x,0,+r.z)); b.expandByPoint(new THREE.Vector3(+r.x+sx,0,+r.z+sz)); }
+  for (const [name,b] of Object.entries(sectors)){ const cc=b.getCenter(new THREE.Vector3()); world.add(floorText(`PT · ${name.toUpperCase()}`, cc.x, cc.z, 4, dark?"#7d8896":"#5d6672")); }
+  for (const r of state.layout) if (isForja(r)){ const {sx,sz}=rackDims(r); const t = label(`${(r.nombre||r.id).toUpperCase()} · MP`, {size:56, color:"#fff", bg:"#5b524b", w:1.4}); t.position.set(+r.x+sx+2.6, 5.6, +r.z-1.4); world.add(t); }
   scene.background = new THREE.Color(cssVar("--scene"));
   paintLoads(); needs = true;
 }
@@ -398,7 +504,7 @@ function paintLoads(){
     const it = itemById(u.item);
     const col = new THREE.Color(clientColor(it?.client));
     s.pal = box(s.size.x, 0.14, s.size.z, MAT.pallet, s.center.x, s.y0+0.07, s.center.z);
-    const h = 0.95;
+    const h = Math.min(0.95, s.size.y - 0.3);
     s.load = box(s.size.x-0.06, h, s.size.z-0.06, new THREE.MeshLambertMaterial({color:col, transparent:true, opacity:1}), s.center.x, s.y0+0.14+h/2, s.center.z);
     world.add(s.pal, s.load);
   }
@@ -417,7 +523,7 @@ function applyHighlight(){
   }
   hits.forEach((code,i)=>{
     const s = slots.get(code); if (!s) return;
-    const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(s.size.x+0.1, 1.25, s.size.z+0.1)), new THREE.LineBasicMaterial({color: i===0 ? 0x1fbf6a : 0xff7a1a}));
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(s.size.x+0.1, s.size.y, s.size.z+0.1)), new THREE.LineBasicMaterial({color: i===0 ? 0x1fbf6a : 0xff7a1a}));
     e.position.copy(s.center); hlGroup.add(e);
   });
   needs = true;
@@ -432,12 +538,17 @@ function flyTo(pos, target, ms=650){
   anim = now => { const k = Math.min(1,(now-st)/ms), e = k<.5 ? 2*k*k : 1-Math.pow(-2*k+2,2)/2;
     camera.position.lerpVectors(p0,pos,e); controls.target.lerpVectors(t0,target,e); if (k>=1) anim=null; needs = true; };
 }
+function zoneBounds(z){
+  const b = new THREE.Box3();
+  for (const r of state.layout){ const f = isForja(r); if (z!=="all" && (z==="forjas") !== f) continue; const {sx,sz} = rackDims(r); b.expandByPoint(new THREE.Vector3(+r.x,0,+r.z)); b.expandByPoint(new THREE.Vector3(+r.x+sx,0,+r.z+sz)); }
+  if (b.isEmpty()) b.copy(bounds); return b;
+}
 function fit(view=state.view, instant=false){
-  const c = bounds.getCenter(new THREE.Vector3()), s = bounds.getSize(new THREE.Vector3());
-  const rad = Math.hypot(s.x, s.z)/2 + 1;
+  const b = zoneBounds(state.zone), c = b.getCenter(new THREE.Vector3()), s = b.getSize(new THREE.Vector3());
+  const rad = Math.hypot(s.x, s.z)/2 + 2;
   const vf = THREE.MathUtils.degToRad(camera.fov)/2, hf = Math.atan(Math.tan(vf)*camera.aspect);
   const dist = rad / Math.sin(Math.min(vf, hf)) * (view==="top" ? 0.92 : 1.0);
-  const dir = view==="top" ? new THREE.Vector3(0,1,0.001) : new THREE.Vector3(-0.45, 0.8, 0.75).normalize();
+  const dir = view==="top" ? new THREE.Vector3(0,1,0.001) : (state.zone==="forjas" ? new THREE.Vector3(0.85, 0.8, 0.3) : state.zone==="all" ? new THREE.Vector3(0.3, 1.0, 0.25) : new THREE.Vector3(-0.45, 0.8, 0.75)).normalize();
   const tgt = c.clone().setY(0);
   const pos = tgt.clone().addScaledVector(dir, dist);
   if (instant){ camera.position.copy(pos); controls.target.copy(tgt); needs=true; } else flyTo(pos, tgt);
@@ -451,6 +562,8 @@ function focusSlot(code){
   const mid = sc.isEmpty() ? bounds.getCenter(new THREE.Vector3()) : sc.getCenter(new THREE.Vector3());
   const off = r.dir==="x" ? new THREE.Vector3(-2.5, 6.5, Math.sign(mid.z - s.center.z || 1)*4) : new THREE.Vector3(Math.sign(mid.x - s.center.x || 1)*4, 6.5, 2.5);
   if (r.piso) off.set(5, 6, 3);
+  if (isForja(r)) off.set(4.6, 3.2, 4.2);
+  const z = isForja(r) ? "forjas" : "pt"; if (state.zone!=="all" && state.zone!==z){ state.zone = z; paintZoneBtns(); }
   flyTo(t.clone().add(off), t);
 }
 function resize(){
@@ -461,7 +574,7 @@ new ResizeObserver(resize).observe(viewer);
 function loop(now){
   if (anim) anim(now);
   if (controls.update() ) needs = true;
-  if (needs){ renderer.render(scene, camera); needs = false; }
+  if (needs){ updateCut(); renderer.render(scene, camera); needs = false; }
   requestAnimationFrame(loop);
 }
 controls.addEventListener("change", ()=> needs = true);
@@ -495,7 +608,9 @@ canvas.addEventListener("pointermove", e=>{
 canvas.addEventListener("pointerleave", ()=>{ hoverBox.visible=false; $("#tip").hidden=true; needs=true; });
 
 $$(".vtools [data-view]").forEach(b=>b.onclick=()=>{ state.view=b.dataset.view; $$(".vtools [data-view]").forEach(x=>x.setAttribute("aria-pressed", x===b)); fit(); });
-$("#fitBtn").onclick = ()=>fit();
+function paintZoneBtns(){ $$(".vtools [data-zone]").forEach(x=>x.setAttribute("aria-pressed", x.dataset.zone===state.zone)); }
+$$(".vtools [data-zone]").forEach(b=>b.onclick=()=>{ state.zone=b.dataset.zone; paintZoneBtns(); fit(); });
+$("#wallBtn").onclick = ()=>{ state.walls = !state.walls; $("#wallBtn").setAttribute("aria-pressed", state.walls); world.traverse(o=>{ if (o.userData.walls) o.visible = state.walls; }); needs = true; };
 
 /* ---------- panel lateral ---------- */
 function setTab(t){ state.tab=t; $$(".tabs [data-tab]").forEach(b=>b.setAttribute("aria-selected", b.dataset.tab===t)); for (const id of ["ubic","buscar","resumen","qr","layout"]) $("#p-"+id).hidden = id!==t; if (t==="layout") renderLayout(); if (t==="qr") renderQR(); if (t==="resumen") renderResumen(); }
@@ -521,7 +636,7 @@ function renderUbic(){
     return;
   }
   const s = slots.get(state.sel), u = state.ubic[state.sel], it = u && itemById(u.item);
-  const where = s.rack.piso ? `Zona de expedición · lugar ${s.p}` : `Rack ${esc(s.rack.id)} · posición ${s.p} · nivel ${s.l}${s.l===1?" (piso)":""}`;
+  const where = s.rack.piso ? `Zona de expedición · lugar ${s.p}` : `${isForja(s.rack) ? esc(s.rack.nombre||"Forja")+" · " : ""}Rack ${esc(s.rack.id)} · posición ${s.p} · nivel ${s.l}${s.l===1 && !(+s.rack.y0) ?" (piso)":""}`;
   p.innerHTML = `
     <div class="loc-h"><div><div class="eyebrow">${esc(s.rack.sector)}</div><div class="loc-code">${esc(state.sel)}</div></div>${u?`<span class="tag">Ocupada</span>`:`<span class="tag" style="background:var(--ok-bg);color:var(--ok)">Libre</span>`}</div>
     <p class="hint" style="font-size:13px">${where}</p>
@@ -534,7 +649,7 @@ function renderUbic(){
         <div class="kv"><span>Ingresó</span><b>${fdate(u.ts)}${u.by?" · "+esc(u.by):""}</b></div>
       </div>
       <div class="acts">
-        <button class="btn primary" data-act="salida">Sacar / despachar</button>
+        <button class="btn primary" data-act="salida">${isForja(s.rack)?"Sacar a producción":"Sacar / despachar"}</button>
         <button class="btn" data-act="mover">Mover</button>
         <button class="btn" data-act="ajuste">Ajustar cantidad</button>
       </div>`
@@ -574,29 +689,35 @@ function renderSearch(){
 $("#q").addEventListener("input", e=>{ state.q = e.target.value; renderSearch(); applyHighlight(); });
 
 /* resumen y conciliación */
-function ptSistema(){
-  const by = {};
+function stockSistema(){
+  const st = {PT:{}, MP:{}}, add = (e,id,q)=>{ st[e][id] = (st[e][id]||0) + q; };
   for (const m of state.movs){
     const q = Math.abs(+m.cant||0);
-    if (m.tipo==="produccion") by[m.item]=(by[m.item]||0)+q;
-    else if (m.tipo==="despacho") by[m.item]=(by[m.item]||0)-q;
-    else if (m.tipo==="ajuste" && m.etapa==="PT") by[m.item]=(by[m.item]||0)+(+m.cant||0);
+    if (m.tipo==="recepcion") add("MP",m.item,q);
+    else if (m.tipo==="produccion"){ add("MP",m.item,-q); add("PT",m.item,q); }
+    else if (m.tipo==="despacho") add("PT",m.item,-q);
+    else if (m.tipo==="scrap") add("MP",m.item,-q);
+    else if (m.tipo==="ajuste") add(m.etapa==="PT"?"PT":"MP", m.item, +m.cant||0);
   }
-  return by;
+  return st;
 }
 function renderResumen(){
   const st = stats();
-  $("#kpis").innerHTML = `<div class="kpi"><div class="v num">${st.occ}/${st.total}</div><div class="l">Posiciones ocupadas</div></div><div class="kpi"><div class="v num">${st.free}</div><div class="l">Libres</div></div><div class="kpi"><div class="v num">${fmt(st.pz)}</div><div class="l">Piezas en racks</div></div>`;
-  const sys = ptSistema(), rk = {};
-  for (const [c,u] of Object.entries(state.ubic)) if (slots.has(c)) rk[u.item]=(rk[u.item]||0)+(+u.qty||0);
-  const ids = [...new Set([...Object.keys(rk), ...Object.keys(sys).filter(k=>Math.abs(sys[k])>0)])].filter(id=>itemById(id) || rk[id]);
-  ids.sort((a,b)=>Math.abs((sys[b]||0)-(rk[b]||0)) - Math.abs((sys[a]||0)-(rk[a]||0)));
-  $("#concBody").innerHTML = ids.length ? ids.map(id=>{ const it=itemById(id), s=Math.round(sys[id]||0), r=rk[id]||0, d=r-s;
-    return `<tr><td><span class="sw" style="background:${clientColor(it?.client)};margin-right:6px"></span>${esc(it?.code||id)}</td><td class="r num">${fmt(s)}</td><td class="r num">${fmt(r)}</td><td class="r num ${d===0?"ok":Math.abs(d)<=Math.max(10,s*0.05)?"wr":"bad"}">${d>0?"+":""}${fmt(d)}</td></tr>`; }).join("")
+  $("#kpis").innerHTML = `<div class="kpi"><div class="v num">${st.occ}/${st.total}</div><div class="l">Posiciones ocupadas</div></div><div class="kpi"><div class="v num">${st.free}</div><div class="l">Libres</div></div><div class="kpi"><div class="v num">${fmt(st.pz)}</div><div class="l">Piezas ubicadas</div></div>`;
+  const sys = stockSistema(), rk = {PT:{}, MP:{}};
+  for (const [c,u] of Object.entries(state.ubic)){ const s = slots.get(c); if (!s) continue; const e = isForja(s.rack) ? "MP" : "PT"; rk[e][u.item] = (rk[e][u.item]||0) + (+u.qty||0); }
+  const rows = [];
+  for (const e of ["PT","MP"]){
+    // MP solo se compara si hay algo ubicado en forjas (el resto de la MP está en otros sectores)
+    const ids = new Set(Object.keys(rk[e])); if (e==="PT") for (const k of Object.keys(sys.PT)) if (Math.abs(sys.PT[k])>0 && itemById(k)) ids.add(k);
+    for (const id of ids){ const s = Math.round(sys[e][id]||0), r = rk[e][id]||0; rows.push({id, e, s, r, d:r-s}); }
+  }
+  rows.sort((a,b)=>Math.abs(b.d)-Math.abs(a.d));
+  $("#concBody").innerHTML = rows.length ? rows.map(x=>{ const it=itemById(x.id);
+    return `<tr><td><span class="sw" style="background:${clientColor(it?.client)};margin-right:6px"></span>${esc(it?.code||x.id)} <span class="hint">${x.e}</span></td><td class="r num">${fmt(x.s)}</td><td class="r num">${fmt(x.r)}</td><td class="r num ${x.d===0?"ok":Math.abs(x.d)<=Math.max(10,Math.abs(x.s)*0.05)?"wr":"bad"}">${x.d>0?"+":""}${fmt(x.d)}</td></tr>`; }).join("")
     : `<tr><td colspan="4" class="empty">Sin datos todavía.</td></tr>`;
   $("#histBody").innerHTML = state.hist.length ? state.hist.slice(0,25).map(h=>`<tr><td class="hint">${fdate(h.ts)}</td><td>${TIPOS[h.tipo]||h.tipo}</td><td class="num">${esc(h.loc)}${h.to?" → "+esc(h.to):""}</td><td class="r num">${fmt(h.qty)}</td></tr>`).join("") : `<tr><td colspan="4" class="empty">Sin movimientos.</td></tr>`;
 }
-
 function renderLegend(){
   const cl = new Set(); for (const u of Object.values(state.ubic)){ const it=itemById(u.item); cl.add(it?.client||""); }
   const list = [...cl].filter(Boolean).sort();
@@ -609,7 +730,7 @@ const locURL = code => `${location.origin}${location.pathname}?loc=${encodeURICo
 function qrSVG(text, cell=4){ const q = qrcode(0,"M"); q.addData(text); q.make(); return q.createSvgTag({cellSize:cell, margin:0, scalable:true}); }
 function renderQR(){
   const sel = $("#qrRack"), cur = sel.value;
-  sel.innerHTML = `<option value="*">Todos (${slots.size} etiquetas)</option>` + state.layout.map(r=>`<option value="${esc(r.id)}">${r.piso?"Expedición":"Rack "+esc(r.id)} (${(+r.n)*(+r.niv||1)})</option>`).join("");
+  sel.innerHTML = `<option value="*">Todos (${slots.size} etiquetas)</option>` + state.layout.map(r=>`<option value="${esc(r.id)}">${r.piso?"Expedición":(isForja(r)?esc(r.nombre||"Forja")+" · rack ":"Rack ")+esc(r.id)} (${(+r.n)*(+r.niv||1)})</option>`).join("");
   if (cur) sel.value = cur;
   const first = [...slots.keys()].find(c => sel.value==="*" || slots.get(c).rack.id===sel.value);
   $("#qrPreview").innerHTML = first ? `<div style="width:140px;background:#fff;padding:8px;border-radius:8px">${qrSVG(locURL(first))}</div><div class="loc-code" style="font-size:22px">${esc(first)}</div><p class="hint">Vista previa de la primera etiqueta</p>` : "";
@@ -617,8 +738,8 @@ function renderQR(){
 $("#qrRack").onchange = renderQR;
 function printLabels(codes){
   $("#labels").innerHTML = codes.map(c=>{ const s = slots.get(c);
-    const desc = s.rack.piso ? `Expedición · lugar ${s.p}` : `Rack ${s.rack.id} · Pos ${s.p} · Nivel ${s.l}`;
-    return `<div class="lbl">${qrSVG(locURL(c))}<div><div class="c">${esc(c)}</div><div class="s">${esc(desc)}<br>IMM · PT y Expedición</div></div></div>`; }).join("");
+    const desc = s.rack.piso ? `Expedición · lugar ${s.p}` : `${isForja(s.rack)?(s.rack.nombre||"Forja")+" · ":""}Rack ${s.rack.id} · Pos ${s.p} · Nivel ${s.l}`;
+    return `<div class="lbl">${qrSVG(locURL(c))}<div><div class="c">${esc(c)}</div><div class="s">${esc(desc)}<br>IMM · ${isForja(s.rack)?"Forjas (MP)":"PT y Expedición"}</div></div></div>`; }).join("");
   setTimeout(()=>window.print(), 50);
 }
 $("#printBtn").onclick = ()=>{ const v = $("#qrRack").value; printLabels([...slots.keys()].filter(c=>v==="*" || slots.get(c).rack.id===v)); };
@@ -659,13 +780,15 @@ function freeOptions(except){
 function openForm(act, code){
   const u = state.ubic[code], f = $("#actForm"), it = u && itemById(u.item);
   const head = t => `<div class="loc-h"><h2>${t} · <span class="num">${esc(code)}</span></h2><button type="button" class="btn sm" id="fClose">Cancelar</button></div>`;
-  if (act==="ingreso") f.innerHTML = head("Ingresar pallet") + `
+  const fj = isForja(slots.get(code).rack);
+  if (act==="ingreso") f.innerHTML = head(fj ? "Ingresar forjas (MP)" : "Ingresar pallet") + `
     <label>Pieza<select id="fItem" required>${itemOptions()}</select></label>
-    <div class="row2"><label>Cantidad (pzas)<input id="fQty" type="number" min="1" step="1" required inputmode="numeric"></label><label>Lote / orden<input id="fLote" placeholder="Ej. PROG-2026-10-20"></label></div>`;
+    <div class="row2"><label>Cantidad (pzas)<input id="fQty" type="number" min="1" step="1" required inputmode="numeric"></label><label>${fj?"Remito / colada":"Lote / orden"}<input id="fLote" placeholder="${fj?"Ej. colada 4521":"Ej. PROG-2026-10-20"}"></label></div>
+    ${fj ? `<label style="display:flex;gap:8px;align-items:flex-start;color:var(--fg)"><input id="fRec" type="checkbox" style="width:auto;margin-top:3px"><span>Registrar también como <b>recepción de MP</b> en el tablero de stock<br><span class="hint">Marcalo si es material que recién llega del proveedor.</span></span></label>` : ""}`;
   if (act==="salida") f.innerHTML = head("Sacar del rack") + `
-    <p class="hint" style="font-size:13px">${esc(it?.code||u.item)} · hay <b class="num">${fmt(u.qty)}</b> pzas</p>
+    <p class="hint" style="font-size:13px">${esc(it?.code||u.item)} · hay <b class="num">${fmt(u.qty)}</b> pzas${fj?" · sale hacia producción (el consumo de MP lo descuenta la producción registrada)":""}</p>
     <label>Cantidad que sale<input id="fQty" type="number" min="1" max="${u.qty}" step="1" value="${u.qty}" required inputmode="numeric"></label>
-    <label style="display:flex;gap:8px;align-items:flex-start;color:var(--fg)"><input id="fDesp" type="checkbox" style="width:auto;margin-top:3px"><span>Registrar también como <b>despacho</b> en el tablero de stock<br><span class="hint">Dejalo sin marcar si el despacho ya se cargó (en Toyota el tablero lo estima solo).</span></span></label>`;
+    ${fj ? "" : `<label style="display:flex;gap:8px;align-items:flex-start;color:var(--fg)"><input id="fDesp" type="checkbox" style="width:auto;margin-top:3px"><span>Registrar también como <b>despacho</b> en el tablero de stock<br><span class="hint">Dejalo sin marcar si el despacho ya se cargó (en Toyota el tablero lo estima solo).</span></span></label>`}`;
   if (act==="mover") f.innerHTML = head("Mover pallet") + `
     <label>Posición destino (libres)<select id="fTo" required>${freeOptions(code)}</select></label>
     <p class="hint">También podés escribirla: <input id="fToTxt" placeholder="Ej. C3-2" style="margin-top:4px"></p>`;
@@ -693,13 +816,14 @@ async function doAct(act, code){
     if (state.ubic[code]) throw new Error("La posición ya está ocupada.");
     const lote = $("#fLote").value.trim();
     ops.push(["set","ubic",code,{item, qty, lote, ts:now, by:myName}]); log({tipo:"ingreso", loc:code, item, qty, lote});
+    if ($("#fRec")?.checked) ops.push(["add","movs",null,{item, tipo:"recepcion", cant:qty, lote, nota:`En ${code} (almacén 3D)`, ts:now, uname:myName}]);
   }
   if (act==="salida"){
     const qty = Math.round(+$("#fQty").value);
     if (!(qty>0) || qty > u.qty) throw new Error(`La cantidad debe estar entre 1 y ${u.qty}.`);
     if (qty === +u.qty) ops.push(["del","ubic",code]); else ops.push(["set","ubic",code,{...u, qty:u.qty-qty}]);
     log({tipo:"salida", loc:code, item:u.item, qty, lote:u.lote||""});
-    if ($("#fDesp").checked) ops.push(["add","movs",null,{item:u.item, tipo:"despacho", cant:qty, lote:u.lote||"", nota:`Desde ${code} (almacén 3D)`, ts:now, uname:myName}]);
+    if ($("#fDesp")?.checked) ops.push(["add","movs",null,{item:u.item, tipo:"despacho", cant:qty, lote:u.lote||"", nota:`Desde ${code} (almacén 3D)`, ts:now, uname:myName}]);
   }
   if (act==="mover"){
     const to = parseCode($("#fToTxt").value) || $("#fTo").value;
@@ -809,7 +933,7 @@ if (DEMO){
   build();
   for (const code of slots.keys()){ k++; if (k%3===0 || k%7===0) continue;
     const id = ids[(k*7)%ids.length]; state.ubic[code] = {item:id, qty: 40 + (k*37)%260, lote:`PROG-10-${String(10+(k%9)).padStart(2,"0")}`, ts: Date.now() - (k%11)*864e5 - k*36e5, by:"Demo"}; }
-  for (const [c,u] of Object.entries(state.ubic)) state.movs.push({item:u.item, tipo:"ajuste", etapa:"PT", cant: u.qty + ((c.charCodeAt(0)%3)===0 ? 30 : 0)});
+  for (const [c,u] of Object.entries(state.ubic)) state.movs.push({item:u.item, tipo:"ajuste", etapa: isForja(slots.get(c).rack) ? "MP" : "PT", cant: u.qty + ((c.charCodeAt(0)%3)===0 ? 30 : 0)});
   state.hist = Object.entries(state.ubic).slice(0,8).map(([c,u])=>({tipo:"ingreso", loc:c, item:u.item, qty:u.qty, ts:u.ts}));
   onData(true);
 } else {
@@ -825,7 +949,7 @@ if (DEMO){
     const live = () => $("#sync").textContent = "En vivo · " + new Date().toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"});
     const onErr = e => $("#sync").textContent = e?.code==="permission-denied" ? "Tu usuario no tiene acceso." : "Conexión interrumpida. Recargá.";
     build();
-    unsubs.push(db.collection("wms").doc("layout").onSnapshot(d=>{ const r = d.exists && d.data().racks; state.layout = Array.isArray(r)&&r.length ? r : structuredClone(DEFAULT_LAYOUT); onData(true); live(); }, onErr));
+    unsubs.push(db.collection("wms").doc("layout").onSnapshot(d=>{ const r = d.exists && d.data().racks; state.layout = Array.isArray(r)&&r.length ? (r.some(isForja) ? r : r.concat(structuredClone(DEFAULT_LAYOUT.filter(isForja)))) : structuredClone(DEFAULT_LAYOUT); onData(true); live(); }, onErr));
     unsubs.push(db.collection("items").onSnapshot(s=>{ state.items = s.docs.map(d=>({id:d.id, ...d.data()})); onData(false); live(); }, onErr));
     unsubs.push(db.collection("ubic").onSnapshot(s=>{ state.ubic = Object.fromEntries(s.docs.map(d=>[d.id, d.data()])); onData(false); live(); }, onErr));
     unsubs.push(db.collection("movs").onSnapshot(s=>{ state.movs = s.docs.map(d=>d.data()); if (state.tab==="resumen") renderResumen(); }, onErr));

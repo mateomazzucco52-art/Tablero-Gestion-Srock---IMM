@@ -18,7 +18,7 @@
   --accent:#c94a0c; --accent-ink:#ffffff; --soft:#fbece3;
   --ok:#1d7a4c; --ok-bg:#dcf2e6; --warn:#946200; --warn-bg:#fbefcf; --crit:#b42318; --crit-bg:#fce3e0; --none-bg:#eceef1;
   --shadow:0 1px 2px rgba(20,25,35,.06),0 4px 14px rgba(20,25,35,.05);
-  --radius:12px;
+  --radius:10px;
   --f-display:"Archivo", "Helvetica Neue", Arial, sans-serif;
   --f-body:"IBM Plex Sans", "Segoe UI", Arial, sans-serif;
   --f-mono:"IBM Plex Mono", ui-monospace, Consolas, monospace;
@@ -42,24 +42,35 @@ html,body{margin:0}
 body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--f-body);transition:background .2s,color .2s}
 /* barra superior */
 .appbar{position:sticky;top:0;z-index:10;background:var(--brand);color:var(--brand-ink);box-shadow:0 2px 10px rgba(0,0,0,.18)}
-.appbar-in{max-width:1280px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.brandmark{display:flex;align-items:center;gap:10px;margin-right:auto;min-width:0}
-.logo{font:800 17px/1 var(--f-display);letter-spacing:.04em;background:var(--accent);color:var(--accent-ink);padding:8px 9px;border-radius:8px}
-.brandmark .t{font:700 17px/1.1 var(--f-display)} .brandmark .st{font-size:12px;color:var(--brand-muted)}
+.appbar-in{max-width:1280px;margin:0 auto;padding:0 16px;min-height:58px;display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.brandmark{display:flex;align-items:center;gap:10px;min-width:0}
+/* navegación entre módulos (mismas rutas de siempre) */
+.modnav{display:flex;gap:2px;align-self:stretch;margin-right:auto}
+.modnav a,.modnav span{display:inline-flex;align-items:center;gap:7px;padding:0 12px;font-size:14px;font-weight:500;color:var(--brand-muted);text-decoration:none;border-bottom:2px solid transparent;transition:color .15s,border-color .15s}
+.modnav svg{width:16px;height:16px}
+.modnav a:hover{color:var(--brand-ink)}
+.modnav [aria-current="page"]{color:var(--brand-ink);border-bottom-color:var(--accent)}
+.modnav a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.bar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.status{display:grid;justify-items:end;line-height:1.25;padding-right:10px;margin-right:2px;border-right:1px solid rgba(255,255,255,.12)}
+.appbar .btn{height:34px;padding:0 12px;font-size:13px;display:inline-flex;align-items:center;gap:6px;border-radius:8px}
+.appbar .btn svg{width:15px;height:15px}
+.logo{font:800 16px/1 var(--f-display);letter-spacing:.04em;background:var(--accent);color:var(--accent-ink);padding:8px 9px;border-radius:7px}
+.brandmark .t{font:700 16px/1.15 var(--f-display)} .brandmark .st{font-size:11.5px;color:var(--brand-muted)}
 .appbar .btn{background:transparent;color:var(--brand-ink);border-color:rgba(255,255,255,.18)}
 .appbar .btn:hover{border-color:var(--accent);background:rgba(255,255,255,.06)}
-.sync{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--brand-muted)}
+.sync{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--brand-muted);white-space:nowrap}
 .sync::before{content:"";width:8px;height:8px;border-radius:50%;background:#5fd19a;box-shadow:0 0 0 3px rgba(95,209,154,.18)}
-.user{font-size:13px;color:var(--brand-muted)}
-.theme-btn{width:38px;height:38px;padding:0;display:inline-grid;place-items:center;border-radius:50%!important}
+.user{font-size:13px;color:var(--brand-ink);font-weight:500;white-space:nowrap;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+.appbar .theme-btn{width:34px;padding:0;justify-content:center}
 .theme-btn svg{width:18px;height:18px}
-.wrap{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:22px 56px;display:grid;gap:22px}
+.wrap{max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:20px 56px;display:grid;gap:20px}
 .eyebrow{font:500 11px var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
 h1{font:800 clamp(24px,4vw,32px)/1.1 var(--f-display);margin:4px 0 0;text-wrap:balance;letter-spacing:-.01em}
 h2{font:700 17px var(--f-display);margin:0;display:flex;align-items:center;gap:8px}
 .num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 button,input,select{font:inherit;color:inherit}
-.btn{border:1px solid var(--line);background:var(--panel);padding:8px 14px;border-radius:9px;cursor:pointer;font-weight:500;transition:border-color .15s,background .15s,transform .05s}
+.btn{border:1px solid var(--line);background:var(--panel);padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:500;transition:border-color .15s,background .15s,transform .05s}
 .btn:hover{border-color:var(--accent)}
 .btn:active{transform:translateY(1px)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
@@ -68,17 +79,21 @@ button,input,select{font:inherit;color:inherit}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .btn:focus-visible,input:focus-visible,select:focus-visible,tr:focus-visible,.chip:focus-visible,.cl:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* indicadores */
-.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.kpi{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);display:grid;grid-template-columns:auto 1fr;gap:4px 14px;align-items:center}
-.kpi .ic{grid-row:span 3;width:42px;height:42px;border-radius:11px;display:grid;place-items:center;background:var(--panel-2);color:var(--muted)}
-.kpi .ic svg{width:22px;height:22px}
-.kpi .v{font:700 28px/1.1 var(--f-mono);font-variant-numeric:tabular-nums}
-.kpi .s{font-size:12px;color:var(--muted)}
-.kpi.crit .v{color:var(--crit)} .kpi.crit .ic{background:var(--crit-bg);color:var(--crit)}
-.kpi.warn .v{color:var(--warn)} .kpi.warn .ic{background:var(--warn-bg);color:var(--warn)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:13px 16px 12px;box-shadow:var(--shadow);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:2px 10px;align-items:start}
+.kpi .eyebrow{grid-column:1;grid-row:1}
+.kpi .v{grid-column:1;grid-row:2;font:700 27px/1.15 var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.kpi .s{grid-column:1/-1;grid-row:3;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi .ic{grid-column:2;grid-row:1/3;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;background:var(--panel-2);color:var(--muted)}
+.kpi .ic svg{width:16px;height:16px}
+/* rojo / ámbar solo cuando el indicador tiene casos; en cero queda neutro */
+.kpi.crit:not(.zero)::before,.kpi.warn:not(.zero)::before{content:"";position:absolute;inset:0 auto 0 0;width:3px}
+.kpi.crit:not(.zero)::before{background:var(--crit)} .kpi.warn:not(.zero)::before{background:var(--warn)}
+.kpi.crit:not(.zero) .v{color:var(--crit)} .kpi.crit:not(.zero) .ic{background:var(--crit-bg);color:var(--crit)}
+.kpi.warn:not(.zero) .v{color:var(--warn)} .kpi.warn:not(.zero) .ic{background:var(--warn-bg);color:var(--warn)}
 .kpi.go .ic{background:var(--soft);color:var(--accent)}
-.grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:22px;align-items:start}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:18px;min-width:0;box-shadow:var(--shadow)}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) 390px;gap:20px;align-items:start}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;min-width:0;box-shadow:var(--shadow)}
 .card-h{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .tools input{width:200px} .tools select{width:auto}
@@ -95,11 +110,115 @@ tbody tr.item{cursor:pointer;transition:background .12s} tbody tr.item:hover{bac
 .pill{font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
 .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
 .pill.ok{background:var(--ok-bg);color:var(--ok)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.crit{background:var(--crit-bg);color:var(--crit)} .pill.none{background:var(--none-bg);color:var(--muted)}
-.cov{display:grid;gap:4px;min-width:130px}
+.cov{display:grid;gap:5px;min-width:0}
 .gauge{position:relative;height:8px;background:var(--none-bg);border-radius:4px;overflow:hidden}
 .gauge i{position:absolute;inset:0 auto 0 0;border-radius:4px}
 .gauge b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--fg);opacity:.5}
 .fifo{font-size:12px;color:var(--muted)}
+/* ---- tabla de stock por pieza ---- */
+.inv-h{display:flex;justify-content:space-between;align-items:center;gap:10px 16px;flex-wrap:wrap;margin-bottom:12px}
+.inv-h h2 .count{font:500 12px var(--f-mono);color:var(--muted)}
+.inv-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1 1 420px;justify-content:flex-end}
+.search{position:relative;flex:1 1 220px;max-width:320px}
+.search svg{position:absolute;left:10px;top:50%;width:16px;height:16px;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+.search input{padding-left:33px;height:36px}
+.inv-tools select{width:auto;max-width:200px;height:36px;padding:0 10px}
+.inv-tools .chip{height:36px;padding:0 14px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;font-weight:500}
+.inv-tools .chip::before{content:"";width:12px;height:12px;border:1.5px solid currentColor;border-radius:3px;opacity:.7;box-sizing:border-box}
+.inv-tools .chip[aria-pressed="true"]{background:var(--soft);border-color:var(--accent);color:var(--accent);font-weight:600}
+.inv-tools .chip[aria-pressed="true"]::before{opacity:1;background:currentColor;box-shadow:inset 0 0 0 2px var(--soft)}
+.inv-wrap{overflow:auto;max-height:max(440px,calc(100vh - 150px));border:1px solid var(--line);border-radius:8px}
+.inv{min-width:760px;font-size:14px;table-layout:fixed}
+.inv th{position:sticky;top:0;z-index:2;white-space:normal;line-height:1.3;vertical-align:bottom;padding:9px 10px;border-radius:0!important;background:var(--panel-2);box-shadow:inset 0 -1px 0 var(--line);border-bottom:0}
+.inv th .k{display:inline-block;font-size:9.5px;font-weight:600;letter-spacing:.04em;padding:1px 5px;border-radius:4px;margin-right:5px;vertical-align:1px;background:var(--none-bg);color:var(--fg)}
+.inv th .k.pt{background:var(--soft);color:var(--accent)}
+.inv td{padding:9px 10px;background:var(--panel)}
+.inv th:first-child,.inv td:first-child{padding-left:14px}
+.inv tbody tr:last-child td{border-bottom:0}
+.inv tr.item:hover td{background:var(--panel-2)}
+.inv tr.item:focus-visible{outline:none} .inv tr.item:focus-visible td{background:var(--panel-2);box-shadow:inset 0 2px 0 var(--accent),inset 0 -2px 0 var(--accent)}
+.inv tr.item td:first-child{box-shadow:inset 3px 0 0 transparent}
+.inv tr.item.st-crit td:first-child{box-shadow:inset 3px 0 0 var(--crit)} .inv tr.item.st-warn td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+.inv .p-n{font-weight:600;line-height:1.3}
+.inv .code{font-size:11.5px}
+.inv .fifo{display:flex;align-items:baseline;gap:6px;margin-top:3px;font-size:11.5px;line-height:1.35;min-width:0}
+.inv .fifo>span:last-child{min-width:0}
+.inv .fifo .k{flex:none}
+.inv .fifo .k{font:600 9.5px var(--f-mono);letter-spacing:.05em;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+.inv .fifo b{font-family:var(--f-mono);font-weight:500;color:var(--fg)}
+.inv .cl-n{font-weight:500}
+.inv .cell{display:block;margin-top:2px;font:500 11.5px/1.35 var(--f-mono);color:var(--muted)}
+.inv .q{font:500 14px var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.inv .q.pt{font-weight:700}
+.inv .ref{display:block;font:400 11px var(--f-mono);color:var(--muted);white-space:nowrap;margin-top:2px}
+.inv .tag{display:inline-flex;align-items:center;gap:4px;margin-top:4px;font:600 11px var(--f-body);padding:1px 7px;border-radius:5px;white-space:nowrap}
+.inv .tag.mp{background:var(--warn-bg);color:var(--warn)}
+.inv .tag.mp::before{content:"▲";font-size:8px}
+.inv .est{font-size:11px;color:var(--muted);margin-left:3px}
+.inv .cov-v{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:0 8px;white-space:nowrap}
+.inv .cov-v .q{font-weight:600}
+.inv .cov-v .ref{margin:0}
+.inv .cov.na .gauge{background:repeating-linear-gradient(90deg,var(--none-bg) 0 6px,transparent 6px 10px)}
+.inv .cov.na .q{font:400 12px var(--f-body);color:var(--muted)}
+.inv .st{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.inv .go{color:var(--muted);opacity:0;transition:opacity .15s;flex:none}
+.inv .go svg{width:16px;height:16px;display:block}
+.inv tr.item:hover .go,.inv tr.item:focus-visible .go{opacity:1}
+.inv .pill{font-size:11.5px;padding:2px 8px}
+.inv .empty{padding:36px 12px}
+.inv .empty b{display:block;color:var(--fg);font-weight:600;margin-bottom:2px}
+/* ---- panorama operativo (etapa 3) ---- */
+.ops-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr) minmax(0,1fr);gap:12px;align-items:start}
+.op{padding:14px 16px;display:grid;gap:10px}
+.op-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.op-h h3{font:700 14.5px var(--f-display);margin:0}
+.op-list{display:grid;gap:2px}
+.op-row{display:grid;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:7px;padding:5px 8px;margin:0 -8px;width:calc(100% + 16px);cursor:pointer;font-size:13px;transition:background .12s,border-color .12s}
+.op-row:hover{background:var(--panel-2)}
+.op-row:focus-visible{outline:2px solid var(--accent);outline-offset:0}
+.op-row[aria-pressed="true"]{background:var(--soft);border-color:var(--accent)}
+.op-row.static{cursor:default} .op-row.static:hover{background:none}
+.op-row .sub{display:block;font:500 11px var(--f-mono);color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-row .nm{display:block;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.op-row .q{font:600 13px var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.op-row .pc{font:400 12px var(--f-mono);color:var(--muted);text-align:right;white-space:nowrap}
+.op-f{margin:0;border-top:1px solid var(--line);padding-top:8px}
+.op-empty{font-size:13px;color:var(--muted);padding:6px 0}
+.sw{width:10px;height:10px;border-radius:3px;flex:none;display:inline-block}
+.sw.crit{background:var(--crit)} .sw.warn{background:var(--warn)} .sw.ok{background:var(--ok)} .sw.none{background:transparent;box-shadow:inset 0 0 0 1.5px var(--muted)}
+/* distribución por estado */
+.stack{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--none-bg);gap:2px}
+.stack i{display:block;height:100%;min-width:3px}
+.stack i.crit{background:var(--crit)} .stack i.warn{background:var(--warn)} .stack i.ok{background:var(--ok)} .stack i.none{background:repeating-linear-gradient(90deg,var(--muted) 0 2px,transparent 2px 5px);opacity:.55}
+.est-row{grid-template-columns:auto minmax(0,1fr) auto 48px}
+.est-row .lb{display:flex;align-items:center;gap:8px;font-weight:500}
+.est-row .lb em{font-style:normal;font-size:11px;font-weight:600;color:var(--crit);margin-left:2px}
+.est-row .lb em.w{color:var(--warn)}
+/* menor cobertura */
+.cov-row{grid-template-columns:minmax(0,1.15fr) minmax(60px,1fr) 52px}
+.cbar{position:relative;height:8px;border-radius:4px;background:var(--none-bg)}
+.cbar i{position:absolute;inset:0 auto 0 0;border-radius:4px}
+.cbar b{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--fg);opacity:.5}
+.cbar.crit i{background:var(--crit)} .cbar.warn i{background:var(--warn)} .cbar.ok i{background:var(--ok)}
+.cov-row .q.crit{color:var(--crit)} .cov-row .q.warn{color:var(--warn)}
+.scale{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(60px,1fr) 52px;gap:10px;font:500 10px var(--f-mono);color:var(--muted);margin-top:-4px}
+.scale span:nth-child(2){display:flex;justify-content:space-between}
+/* alertas por cliente */
+.cla-row{grid-template-columns:minmax(0,1fr) minmax(50px,1.1fr) auto}
+.cbars{display:flex;height:10px;gap:2px}
+.cbars i{display:block;height:100%;border-radius:2px}
+.cbars i.crit{background:var(--crit)} .cbars i.warn{background:var(--warn)}
+.cla-row .q{font-weight:500;font-size:12px}
+.cla-row .q b{font-weight:700}
+.cla-row .q .c{color:var(--crit)} .cla-row .q .w{color:var(--warn)}
+.est-chip[aria-pressed="true"]::before{display:none}
+.est-chip::after{content:"✕";font-size:11px;margin-left:2px}
+#fClear{height:36px;padding:0 12px}
+@media (max-width:1100px){.ops-grid{grid-template-columns:minmax(0,1fr) minmax(0,1fr)} .ops-grid .op:nth-child(2){grid-column:1/-1;order:-1}}
+@media (max-width:680px){.ops-grid{grid-template-columns:minmax(0,1fr)} .ops-grid .op:nth-child(2){order:0}}
+.inv-foot{display:flex;justify-content:space-between;gap:6px 16px;flex-wrap:wrap;margin-top:10px}
+@media (max-width:860px){.inv td:first-child,.inv th:first-child{position:sticky;left:0;z-index:1;min-width:170px;max-width:200px} .inv th:first-child{z-index:3} .inv td:first-child{box-shadow:inset -1px 0 0 var(--line)} .inv tr.item.st-crit td:first-child{box-shadow:inset 3px 0 0 var(--crit),inset -1px 0 0 var(--line)} .inv tr.item.st-warn td:first-child{box-shadow:inset 3px 0 0 var(--warn),inset -1px 0 0 var(--line)} .inv .go{opacity:1} .inv-wrap{max-height:none}}
+@media (max-width:520px){.inv-tools{flex-basis:100%} .search{max-width:none;flex-basis:100%} .inv-tools select{flex:1;max-width:none}}
 form{display:grid;gap:12px}
 label{display:grid;gap:5px;font-size:13px;color:var(--muted);font-weight:500}
 input,select{border:1px solid var(--line);background:var(--panel-2);border-radius:9px;padding:9px 11px;width:100%;min-width:0;transition:border-color .15s}
@@ -120,11 +239,22 @@ input:hover,select:hover{border-color:var(--muted)}
 .empty{padding:32px 8px;text-align:center;color:var(--muted)}
 .mv-in{color:var(--ok)} .mv-out{color:var(--crit)} .mv-adj{color:var(--warn)}
 .confirm{display:inline-flex;gap:4px}
-.clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}
-.cl{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:14px 16px;text-align:left;cursor:pointer;display:grid;gap:5px;box-shadow:var(--shadow);transition:border-color .15s,transform .15s}
-.cl:hover{border-color:var(--accent);transform:translateY(-1px)} .cl[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--shadow)}
-.cl .n{font:700 15px var(--f-display)} .cl .m{font-size:12px;color:var(--muted)}
-.cl .row{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.sec-h{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+.sec-h h2 .count{font:500 12px var(--f-mono);color:var(--muted)}
+.clients{display:grid;grid-template-columns:repeat(auto-fill,minmax(205px,1fr));gap:10px}
+.cl{position:relative;overflow:hidden;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px 10px 14px;text-align:left;cursor:pointer;display:grid;gap:8px;box-shadow:var(--shadow);transition:border-color .15s,box-shadow .15s}
+.cl:hover{border-color:var(--muted)} .cl[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent),var(--shadow)}
+.cl.al-warn::before,.cl.al-crit::before{content:"";position:absolute;inset:0 auto 0 0;width:3px}
+.cl.al-warn::before{background:var(--warn)} .cl.al-crit::before{background:var(--crit)}
+.cl-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;min-width:0}
+.cl .n{font:700 14.5px/1.2 var(--f-display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .cl .m{font-size:11.5px;color:var(--muted);white-space:nowrap}
+.cl-m{display:grid;grid-template-columns:.8fr 1.3fr .9fr;gap:6px;border-top:1px solid var(--line);padding-top:7px}
+.cl-m>span{display:grid;gap:1px;min-width:0}
+.cl-m>span:not(:first-child){text-align:right}
+.cl-m small{font:500 10px var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.cl-m b{font:600 14px/1.3 var(--f-mono);font-variant-numeric:tabular-nums}
+.cl-m .zero{color:var(--muted);font-weight:500}
+.cl-m .a-warn{color:var(--warn)} .cl-m .a-crit{color:var(--crit)}
 .cl-list{display:grid;gap:6px;margin-top:4px}
 .cl-item{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);font-size:14px}
 .page-h{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
@@ -133,7 +263,8 @@ input:hover,select:hover{border-color:var(--muted)}
 .login .card{max-width:420px;width:100%;text-align:center;display:grid;gap:16px;padding:32px 28px}
 .login .logo{font-size:26px;padding:12px 14px;justify-self:center;border-radius:12px}
 @media (max-width:960px){.grid{grid-template-columns:minmax(0,1fr)} .kpis{grid-template-columns:repeat(2,minmax(0,1fr))} .side{position:static}}
-@media (max-width:520px){.kpi{grid-template-columns:1fr;padding:12px 14px} .kpi .ic{display:none} .kpi .v{font-size:24px} .clients{grid-template-columns:repeat(2,minmax(0,1fr))} .user,.sync{display:none} .tools input{width:100%}}
+@media (max-width:860px){.modnav{order:3;width:calc(100% + 32px);margin:0 -16px;padding:0 6px;border-top:1px solid rgba(255,255,255,.08);min-height:40px} .brandmark{margin-right:auto} .appbar-in{gap:8px 14px;padding-top:8px;min-height:0}}
+@media (max-width:520px){.kpi{padding:11px 12px} .kpi .ic{display:none} .kpi .v{font-size:23px} .kpi .s{white-space:normal} .clients{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px} .cl{padding:9px 10px 9px 12px} .cl-m{grid-template-columns:1fr 1fr} .cl-m>span:nth-child(2){text-align:right} .cl-m>span:nth-child(3){grid-column:1/-1;text-align:left;display:flex;justify-content:space-between;align-items:baseline} .user{display:none} .status{border-right:0;padding-right:0} .sync{font-size:0;gap:0} .brandmark .st{display:none} .appbar .btn{padding:0 10px} .tools input{width:100%}}
 @media (prefers-reduced-motion:no-preference){.gauge i{transition:width .3s}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
@@ -157,13 +288,17 @@ input:hover,select:hover{border-color:var(--muted)}
       <span class="logo">IMM</span>
       <div><div class="t">Stock Planta</div><div class="st">IMM Autopartes · Patrón IV, Córdoba</div></div>
     </div>
-    <span class="sync" id="sync">Conectando…</span>
-    <a class="btn" href="./wms.html" style="text-decoration:none">Almacén 3D</a>
-    <button class="btn" id="exportBtn">Exportar CSV</button>
-    <label class="btn" id="importWrap" hidden style="display:inline-flex">Importar datos<input type="file" id="importFile" accept=".json" hidden></label>
-    <span class="user" id="userName"></span>
-    <button class="btn theme-btn" id="themeBtn" type="button" aria-label="Cambiar a modo noche" title="Modo día / noche"></button>
-    <button class="btn" id="logoutBtn">Salir</button>
+    <nav class="modnav" aria-label="Módulos">
+      <span aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><path d="M12 13v8"/></svg>Stock</span>
+      <a href="./wms.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21V8l9-5 9 5v13"/><path d="M7 21v-8h10v8M7 17h10"/></svg>Almacén 3D</a>
+    </nav>
+    <div class="bar-right">
+      <div class="status"><span class="sync" id="sync">Conectando…</span><span class="user" id="userName"></span></div>
+      <button class="btn" id="exportBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Exportar CSV</button>
+      <label class="btn" id="importWrap" hidden style="display:inline-flex">Importar datos<input type="file" id="importFile" accept=".json" hidden></label>
+      <button class="btn theme-btn" id="themeBtn" type="button" aria-label="Cambiar a modo noche" title="Modo día / noche"></button>
+      <button class="btn" id="logoutBtn">Salir</button>
+    </div>
   </div>
 </header>
 <div class="wrap">
@@ -176,27 +311,54 @@ input:hover,select:hover{border-color:var(--muted)}
   </section>
 
   <section aria-label="Clientes">
-    <div class="card-h" style="margin-bottom:8px"><h2>Clientes</h2><span class="hint">Tocar un cliente para filtrar la tabla</span></div>
+    <div class="sec-h"><h2>Clientes <span class="count" id="clCount"></span></h2><span class="hint">Tocar un cliente para filtrar la tabla</span></div>
     <div class="clients" id="clStrip"><div class="hint">Cargando clientes…</div></div>
   </section>
 
+  <section aria-label="Panorama operativo">
+    <div class="sec-h"><h2>Panorama operativo</h2><span class="hint">Toda la planta, con los mismos estados de la tabla · tocar para filtrar o abrir</span></div>
+    <div class="ops-grid">
+      <div class="card op">
+        <div class="op-h"><h3>Piezas por estado</h3><span class="hint" id="opEstT"></span></div>
+        <div class="stack" id="opStack" aria-hidden="true"></div>
+        <div class="op-list" id="opEst"></div>
+      </div>
+      <div class="card op">
+        <div class="op-h"><h3>Menor cobertura de PT</h3><span class="hint">críticas y a programar primero</span></div>
+        <div class="op-list" id="opCov"></div>
+        <div class="scale" aria-hidden="true"><span></span><span><span>0</span><span>2,5</span><span>5+ días</span></span><span></span></div>
+        <p class="op-f hint" id="opCovF"></p>
+      </div>
+      <div class="card op">
+        <div class="op-h"><h3>Alertas por cliente</h3><span class="hint" id="opClT"></span></div>
+        <div class="op-list" id="opCl"></div>
+        <p class="op-f hint" id="opClF"></p>
+      </div>
+    </div>
+  </section>
+
   <div class="grid">
-    <section class="card">
-      <div class="card-h">
-        <h2>Stock por pieza</h2>
-        <div class="tools">
-          <input id="q" type="search" placeholder="Buscar pieza o código" aria-label="Buscar pieza">
+    <section class="card" id="invCard">
+      <div class="inv-h">
+        <h2>Stock por pieza <span class="count" id="invCount"></span></h2>
+        <div class="inv-tools">
+          <div class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" type="search" placeholder="Buscar pieza o código" aria-label="Buscar pieza"></div>
           <select id="fClient" aria-label="Filtrar por cliente"><option value="">Todos los clientes</option></select>
           <button class="chip" id="fAlert" aria-pressed="false">Solo alertas</button>
+          <button class="chip est-chip" id="fEst" aria-pressed="true" hidden title="Quitar el filtro por estado"></button>
+          <button class="btn small" id="fClear" type="button" hidden title="Quitar búsqueda, cliente, Solo alertas y estado">Ver todo</button>
         </div>
       </div>
-      <div class="scroll">
-        <table>
-          <thead><tr><th>Pieza</th><th>Cliente · Celda</th><th class="r">Materia prima</th><th class="r">Producto terminado</th><th class="r">Demanda/día</th><th>Cobertura PT</th><th>Estado</th></tr></thead>
+      <div class="inv-wrap">
+        <table class="inv">
+          <colgroup><col style="width:23%"><col style="width:13%"><col style="width:10%"><col style="width:11%"><col style="width:9%"><col style="width:18%"><col style="width:16%"></colgroup>
+          <thead><tr><th>Pieza</th><th>Cliente · Celda</th><th class="r"><span class="k">MP</span>Materia prima</th><th class="r"><span class="k pt">PT</span>Producto terminado</th><th class="r">Demanda/<wbr>día</th><th>Cobertura PT</th><th>Estado</th></tr></thead>
           <tbody id="itemsBody"><tr><td colspan="7" class="empty">Cargando piezas…</td></tr></tbody>
         </table>
       </div>
-      <p class="hint" style="margin-top:10px">Cobertura = producto terminado ÷ demanda diaria (o el despacho promedio de 14 días si no hay demanda cargada). La marca vertical es el stock de seguridad. Tocar una fila para editar la pieza.</p>
+      <div class="inv-foot">
+        <p class="hint">Cobertura = producto terminado ÷ demanda diaria (o el despacho promedio de 14 días si no hay demanda cargada, marcado “est.”). FIFO ↦ indica el lote de PT a despachar primero. La barra va de 0 a 5 días; la marca vertical es el stock de seguridad. Tocar una fila para editar la pieza.</p>
+      </div>
     </section>
 
     <aside class="side">
@@ -316,7 +478,7 @@ const MOV = {
   scrap:{lbl:"Scrap", eff:"− Materia prima (pieza perdida en proceso)", lote:"Causa", cls:"mv-out"},
   ajuste:{lbl:"Ajuste", eff:"± Conteo físico en la etapa elegida", lote:"Lote", cls:"mv-adj"}
 };
-const state = {programas:[], loaded:{items:false,movs:false,programas:false}, clients:[], items:[], movs:[], q:"", client:"", alert:false, movType:"recepcion", editing:null, canWrite:true, names:{}};
+const state = {est:"", programas:[], loaded:{items:false,movs:false,programas:false}, clients:[], items:[], movs:[], q:"", client:"", alert:false, movType:"recepcion", editing:null, canWrite:true, names:{}};
 let db = null, user = null, myId = null, myName = "";
 const fmt = n => (Math.round(n*10)/10).toLocaleString("es-AR");
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -363,6 +525,45 @@ function compute(){
 }
 const STATUS = {ok:"OK", warn:"Programar", crit:"Crítico", none:"Sin datos"};
 
+/* ---- panorama operativo: solo lee calc (stock, cobertura y estado ya calculados por compute) ---- */
+function renderOps(items, calc, allCl){
+  const N = items.length, pct = n => N ? Math.round(n/N*100) : 0;
+  // 1) piezas por estado
+  const cnt = {crit:0, warn:0, ok:0, none:0};
+  items.forEach(it=>cnt[calc[it.id].status]++);
+  $("#opEstT").textContent = N ? `${N} piezas` : "";
+  $("#opStack").innerHTML = N ? ["crit","warn","ok","none"].filter(k=>cnt[k]).map(k=>`<i class="${k}" style="flex:${cnt[k]}"></i>`).join("") : "";
+  const note = {crit:"atender", warn:"programar"};
+  $("#opEst").innerHTML = !N ? `<div class="op-empty">Todavía no hay piezas cargadas.</div>` : ["crit","warn","ok","none"].map(k=>
+    `<button class="op-row est-row" type="button" data-est="${k}" aria-pressed="${state.est===k}" aria-label="${STATUS[k]}: ${cnt[k]} piezas, ${pct(cnt[k])} %. Filtrar la tabla">
+      <span class="sw ${k}"></span><span class="lb">${STATUS[k]}${note[k]&&cnt[k]?` <em class="${k==="warn"?"w":""}">· ${note[k]}</em>`:""}</span><span class="q">${cnt[k]}</span><span class="pc">${pct(cnt[k])} %</span></button>`).join("");
+  // 2) menor cobertura: piezas con cobertura calculada; primero críticas, luego a programar, luego OK
+  const rank = {crit:0, warn:1, ok:2, none:3}, maxD = 5;
+  const withCov = items.filter(it=>calc[it.id].cover!=null);
+  const noCov = N - withCov.length;
+  const top = withCov.slice().sort((a,b)=>rank[calc[a.id].status]-rank[calc[b.id].status] || calc[a.id].cover-calc[b.id].cover).slice(0,8);
+  $("#opCov").innerHTML = !top.length ? `<div class="op-empty">Ninguna pieza tiene demanda o despachos para calcular la cobertura.</div>` : top.map(it=>{
+    const r = calc[it.id], ss = +it.ss||0, ssD = r.daily>0 ? ss/r.daily : 0, w = Math.min(100, r.cover/maxD*100), cls = r.status==="none"?"ok":r.status;
+    return `<button class="op-row cov-row" type="button" data-id="${esc(it.id)}" title="${esc(it.name)} · ${STATUS[r.status]} · abrir la pieza">
+      <span style="min-width:0"><span class="nm">${esc(it.code)}</span><span class="sub">${esc(it.client||"Sin cliente")}</span></span>
+      <span class="cbar ${cls}"><i style="width:${Math.max(w, r.cover>0?2:0)}%"></i>${ssD>0?`<b style="left:${Math.min(99,ssD/maxD*100)}%"></b>`:""}</span>
+      <span class="q ${r.status==="crit"||r.status==="warn"?r.status:""}">${fmt(r.cover)} d</span></button>`; }).join("");
+  $("#opCovF").textContent = !N ? "" : noCov ? `${noCov} pieza${noCov===1?"":"s"} sin datos para calcular la cobertura (sin demanda ni despachos en 14 días): no se muestran acá ni se cuentan como 0 días.` : "Todas las piezas tienen cobertura calculada.";
+  // 3) alertas por cliente: cantidad de piezas en Crítico y Programar (no unidades)
+  const by = {}; items.forEach(it=>{ const st = calc[it.id].status; if (st!=="crit" && st!=="warn") return; const k = it.client||""; (by[k] ||= {crit:0, warn:0})[st]++; });
+  const rows = Object.entries(by).sort((a,b)=>b[1].crit-a[1].crit || (b[1].crit+b[1].warn)-(a[1].crit+a[1].warn) || a[0].localeCompare(b[0]));
+  const mx = Math.max(1, ...rows.map(([,v])=>v.crit+v.warn));
+  const withCrit = rows.filter(([k,v])=>k && v.crit>0).length, nCl = allCl.length;
+  $("#opClT").textContent = nCl ? `${withCrit} de ${nCl} cliente${nCl===1?"":"s"} con críticas` : "";
+  $("#opCl").innerHTML = !rows.length ? `<div class="op-empty">Ningún cliente tiene piezas en Crítico o Programar.</div>` : rows.map(([k,v])=>{
+    const bar = `<span class="cbars">${v.crit?`<i class="crit" style="width:${v.crit/mx*100}%"></i>`:""}${v.warn?`<i class="warn" style="width:${v.warn/mx*100}%"></i>`:""}</span>`;
+    const q = `<span class="q">${v.crit?`<span class="c"><b>${v.crit}</b> crít.</span>`:""}${v.crit&&v.warn?" · ":""}${v.warn?`<span class="w"><b>${v.warn}</b> prog.</span>`:""}</span>`;
+    return k ? `<button class="op-row cla-row" type="button" data-cl="${esc(k)}" aria-pressed="${state.client===k}" title="Filtrar la tabla por ${esc(k)}"><span class="nm">${esc(k)}</span>${bar}${q}</button>`
+             : `<div class="op-row cla-row static" title="Piezas sin cliente asignado"><span class="nm" style="color:var(--muted)">Sin cliente</span>${bar}${q}</div>`; }).join("");
+  const quiet = allCl.filter(c=>!by[c]);
+  $("#opClF").textContent = !nCl ? "" : quiet.length ? `Sin piezas en Crítico o Programar: ${quiet.join(", ")}.` : "Todos los clientes tienen alguna alerta.";
+}
+
 function render(){
   const calc = compute();
   const items = [...state.items].sort((a,b)=>(a.client||"").localeCompare(b.client||"") || a.code.localeCompare(b.code));
@@ -373,6 +574,7 @@ function render(){
   const clients = [...new Set(items.map(i=>i.client).filter(Boolean))];
   $("#kTotalS").textContent = clients.length ? `${clients.length} cliente${clients.length>1?"s":""}` : " ";
   $("#kCrit").textContent = crit; $("#kMP").textContent = mp;
+  $("#kCrit").closest(".kpi").classList.toggle("zero", crit===0); $("#kMP").closest(".kpi").classList.toggle("zero", mp===0);
   $("#kDesp").textContent = fmt(despHoy); $("#kProd").textContent = `Producido hoy: ${fmt(prodHoy)} pzas`;
 
   // clientes: lista maestra + los usados en piezas
@@ -387,11 +589,12 @@ function render(){
   $("#clStrip").innerHTML = allCl.length ? allCl.map(c=>{
     const its = items.filter(i=>i.client===c);
     const pt = its.reduce((a,i)=>a+calc[i.id].PT,0), al = its.filter(i=>["crit","warn"].includes(calc[i.id].status)||calc[i.id].mpLow).length;
-    return `<button class="cl" data-cl="${esc(c)}" aria-pressed="${state.client===c}"><span class="n">${esc(c)}</span><span class="m">${esc(rubro[c]||"")}</span>
-      <span class="row"><span>Piezas</span><b class="num">${its.length}</b></span>
-      <span class="row"><span>PT en stock</span><b class="num">${fmt(pt)}</b></span>
-      <span class="row"><span>Alertas</span>${al?`<span class="pill crit">${al}</span>`:`<b class="num">0</b>`}</span></button>`;
+    const lv = !al ? "" : its.some(i=>calc[i.id].status==="crit") ? "crit" : "warn";   // solo visual: rojo si hay alguna pieza crítica, ámbar si no
+    return `<button class="cl${lv?" al-"+lv:""}" data-cl="${esc(c)}" aria-pressed="${state.client===c}">
+      <span class="cl-h"><span class="n">${esc(c)}</span><span class="m">${esc(rubro[c]||"")}</span></span>
+      <span class="cl-m"><span><small>Piezas</small><b>${its.length}</b></span><span><small>PT en stock</small><b>${fmt(pt)}</b></span><span><small>Alertas</small><b class="${al?"a-"+lv:"zero"}">${al}</b></span></span></button>`;
   }).join("") : `<div class="hint">Todavía no hay clientes. Agregalos en la pestaña “Clientes”.</div>`;
+  $("#clCount").textContent = allCl.length ? `· ${allCl.length}` : "";
   $("#clList").innerHTML = state.clients.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(c=>{
     const n = items.filter(i=>i.client===c.name).length;
     return `<div class="cl-item"><span><b>${esc(c.name)}</b> <span class="code">${esc(c.rubro||"")} · ${n} pieza${n===1?"":"s"}</span></span>
@@ -401,26 +604,32 @@ function render(){
   const q = state.q.toLowerCase();
   const shown = items.filter(it => (!state.client || it.client===state.client)
     && (!q || (it.code+" "+it.name+" "+(it.cell||"")).toLowerCase().includes(q))
-    && (!state.alert || ["crit","warn"].includes(calc[it.id].status) || calc[it.id].mpLow));
+    && (!state.alert || ["crit","warn"].includes(calc[it.id].status) || calc[it.id].mpLow)
+    && (!state.est || calc[it.id].status===state.est));
+  $("#fEst").hidden = !state.est; $("#fEst").textContent = state.est ? `Estado: ${STATUS[state.est]}` : "";
+  $("#fClear").hidden = !(state.q || state.client || state.alert || state.est);
+  renderOps(items, calc, allCl);
   const body = $("#itemsBody");
-  if (!items.length) body.innerHTML = `<tr><td colspan="7" class="empty">No hay piezas cargadas. Creá la primera en la pestaña “Pieza”.</td></tr>`;
-  else if (!shown.length) body.innerHTML = `<tr><td colspan="7" class="empty">Ninguna pieza coincide con el filtro.</td></tr>`;
+  $("#invCount").textContent = items.length ? (shown.length===items.length ? `· ${items.length}` : `· ${shown.length} de ${items.length}`) : "";
+  if (!items.length) body.innerHTML = `<tr><td colspan="7" class="empty"><b>No hay piezas cargadas.</b>Creá la primera en la pestaña “Pieza”.</td></tr>`;
+  else if (!shown.length) body.innerHTML = `<tr><td colspan="7" class="empty"><b>Ninguna pieza coincide con el filtro.</b>Revisá la búsqueda, el cliente elegido, “Solo alertas” o el filtro por estado.</td></tr>`;
   else body.innerHTML = shown.map(it=>{
     const r = calc[it.id], ss=+it.ss||0;
     const maxD = 5, ssD = r.daily>0 ? ss/r.daily : 0;
     const w = r.cover==null ? 0 : Math.min(100, r.cover/maxD*100);
     const col = r.status==="crit"?"var(--crit)":r.status==="warn"?"var(--warn)":"var(--ok)";
     const first = r.lots.PT[0];
-    return `<tr class="item" tabindex="0" data-id="${esc(it.id)}">
-      <td><div style="font-weight:600">${esc(it.name)}</div><div class="code">${esc(it.code)}</div>
-        ${first?`<div class="fifo">FIFO → despachar primero: <b>${esc(first.lote)}</b> (${fmt(first.rem)} pzas, ${Math.floor((Date.now()-first.ts)/864e5)} d)</div>`:""}</td>
-      <td>${esc(it.client||"–")}<div class="code">${esc(it.cell||"")}</div></td>
-      <td class="r num">${fmt(r.MP)}${r.mpLow?`<div><span class="pill warn">Pedir MP</span></div>`:""}</td>
-      <td class="r num"><b>${fmt(r.PT)}</b>${ss?`<div class="code">SS ${fmt(ss)}</div>`:""}</td>
-      <td class="r num">${+it.dem ? fmt(+it.dem) : (r.daily>0?`<span class="code">~${fmt(r.daily)}</span>`:"–")}</td>
-      <td><div class="cov"><span class="num">${r.cover==null?"–":fmt(r.cover)+" días"}</span>
+    const covTitle = r.cover==null ? "Sin demanda ni despachos de los últimos 14 días: no se puede calcular la cobertura" : `Cobertura ${fmt(r.cover)} días (escala 0 a 5 días)${ssD>0?` · stock de seguridad ${fmt(ssD)} días`:""}`;
+    return `<tr class="item${r.status==="crit"||r.status==="warn"?" st-"+r.status:""}" tabindex="0" data-id="${esc(it.id)}" title="Editar pieza">
+      <td><div class="p-n">${esc(it.name)}</div><div class="code">${esc(it.code)}</div>
+        ${first?`<div class="fifo" title="FIFO → despachar primero: ${esc(first.lote)} (${fmt(first.rem)} pzas, ${Math.floor((Date.now()-first.ts)/864e5)} d)"><span class="k">FIFO ↦</span><span><b>${esc(first.lote)}</b> · ${fmt(first.rem)} pzas · ${Math.floor((Date.now()-first.ts)/864e5)} d</span></div>`:""}</td>
+      <td><div class="cl-n">${esc(it.client||"–")}</div>${it.cell?`<div class="cell" title="Celda / máquina">${esc(it.cell)}</div>`:""}</td>
+      <td class="r"><span class="q">${fmt(r.MP)}</span>${+it.ppmp?`<span class="ref" title="Punto de pedido de MP">PP ${fmt(+it.ppmp)}</span>`:""}${r.mpLow?`<div><span class="tag mp">Pedir MP</span></div>`:""}</td>
+      <td class="r"><span class="q pt">${fmt(r.PT)}</span>${ss?`<span class="ref" title="Stock de seguridad de PT">SS ${fmt(ss)}</span>`:""}</td>
+      <td class="r">${+it.dem ? `<span class="q">${fmt(+it.dem)}</span>` : (r.daily>0?`<span class="q" title="Estimada: despacho promedio de los últimos 14 días">~${fmt(r.daily)}</span><span class="ref">est.</span>`:`<span class="q" style="color:var(--muted)">–</span>`)}</td>
+      <td><div class="cov${r.cover==null?" na":""}" title="${covTitle}"><div class="cov-v"><span class="q">${r.cover==null?"Sin datos":fmt(r.cover)+" días"}</span>${ssD>0?`<span class="ref">SS ${fmt(ssD)} d</span>`:""}</div>
         <div class="gauge"><i style="width:${w}%;background:${col}"></i>${ssD>0?`<b style="left:${Math.min(99,ssD/maxD*100)}%"></b>`:""}</div></div></td>
-      <td><span class="pill ${r.status}">${STATUS[r.status]}</span></td></tr>`;
+      <td><div class="st"><span class="pill ${r.status}">${STATUS[r.status]}</span><span class="go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6"/></svg></span></div></td></tr>`;
   }).join("");
 
   // selector de piezas
@@ -486,6 +695,13 @@ $("#tabCl").onclick = ()=>showTab("cl");
 $("#tabPr").onclick = ()=>{ showTab("pr"); if (!$("#prLunes").value) $("#prLunes").value = isoDate(mondayOf(new Date())); loadPrograma(); };
 $("#clStrip").addEventListener("click", e=>{ const b=e.target.closest(".cl"); if(!b) return;
   state.client = state.client===b.dataset.cl ? "" : b.dataset.cl; render(); });
+/* panorama operativo: reutiliza el filtro de cliente, un filtro de vista por estado y la edición de piezas existente */
+const toTable = () => { if (matchMedia("(max-width:960px)").matches) $("#invCard").scrollIntoView({behavior:"smooth", block:"start"}); };
+$("#opEst").addEventListener("click", e=>{ const b=e.target.closest("[data-est]"); if(!b) return; state.est = state.est===b.dataset.est ? "" : b.dataset.est; render(); if (state.est) toTable(); });
+$("#opCl").addEventListener("click", e=>{ const b=e.target.closest("button[data-cl]"); if(!b) return; state.client = state.client===b.dataset.cl ? "" : b.dataset.cl; render(); if (state.client) toTable(); });
+$("#opCov").addEventListener("click", e=>{ const b=e.target.closest("[data-id]"); if(!b) return; editItem(b.dataset.id); if (matchMedia("(max-width:960px)").matches) $("#itemForm").scrollIntoView({behavior:"smooth", block:"start"}); });
+$("#fEst").addEventListener("click", ()=>{ state.est = ""; render(); });
+$("#fClear").addEventListener("click", ()=>{ state.q = ""; $("#q").value = ""; state.client = ""; state.alert = false; $("#fAlert").setAttribute("aria-pressed", false); state.est = ""; render(); });
 $("#clForm").addEventListener("submit", async e=>{
   e.preventDefault();
   if (!db) return flash("#clMsg","Base de datos no disponible en esta vista.","err");
